@@ -5,7 +5,7 @@ import { ensureOfficeGate } from "@/lib/ip";
 
 const encoder = new TextEncoder();
 const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret";
-  
+
 export async function middleware(req: NextRequest) {
   const path = req.nextUrl.pathname;
   const token = req.cookies.get("token")?.value;
