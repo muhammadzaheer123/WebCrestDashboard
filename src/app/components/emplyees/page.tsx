@@ -164,7 +164,7 @@ export default function EmployeesPage() {
               HR • <span className="text-[#BB37A4]">Employees</span>
             </h1>
             <p className="text-sm text-[#d9c9ff]">
-              Manage employees: create, update, search, and remove.
+              Manage employees: create, update, search, and remove.!
             </p>
           </div>
 
