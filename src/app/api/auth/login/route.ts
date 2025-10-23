@@ -1,41 +1,35 @@
 import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
 import jwt from "jsonwebtoken";
 import { z, ZodError } from "zod";
 import { connectDB } from "@/lib/db";
 import User from "@/models/user.model";
-import { getClientIp, isIpAllowed } from "@/lib/clientIp";
+import { ensureOfficeGate } from "@/lib/ip";
 
 export const runtime = "nodejs";
-
-const ALLOW = (process.env.ALLOWED_IPS ?? "")
-  .split(",")
-  .map((s) => s.trim())
-  .filter(Boolean);
 
 const LoginSchema = z.object({
   email: z.string().email("Invalid email format"),
   password: z.string().min(1, "Password is required"),
 });
 
-export async function POST(req: NextRequest) {
-  try {
-    const ip = getClientIp(req);
-    console.log("🔐 Login attempt from IP:", ip);
+const ALLOWED_ROLES = ["admin", "hr"];
 
-    if (!isIpAllowed(ip, ALLOW)) {
-      console.log("🚫 Office network access denied for IP:", ip);
+const MAX_AGE = 60 * 60 * 8;
+
+export async function POST(req: Request) {
+  try {
+    const gate = ensureOfficeGate(req.headers);
+    if (!gate.ok) {
       return NextResponse.json(
         {
           message: "Access restricted",
-          details: "Login is only available from office network",
-          ip,
+          details: "Login is only available from the office network",
+          ip: gate.ip,
+          reason: gate.reason,
         },
         { status: 403 }
       );
     }
-
-    console.log("✅ Office network access granted for IP:", ip);
 
     const body = await req.json();
     const { email, password } = LoginSchema.parse(body);
@@ -44,19 +38,26 @@ export async function POST(req: NextRequest) {
 
     const user = await User.findOne({
       email: email.toLowerCase().trim(),
-    }).select("+password");
-
+    }).select("+password +role");
     if (!user) {
-      console.log("❌ User not found:", email);
       return NextResponse.json(
         { message: "Invalid credentials" },
         { status: 401 }
       );
     }
 
-    const isPasswordValid = await user.comparePassword(password);
-    if (!isPasswordValid) {
-      console.log("❌ Invalid password for user:", email);
+    if (!ALLOWED_ROLES.includes(user.role)) {
+      return NextResponse.json(
+        {
+          message: "Access denied",
+          details: "Dashboard access is restricted to Admin and HR staff only",
+        },
+        { status: 403 }
+      );
+    }
+
+    const ok = await user.comparePassword(password);
+    if (!ok) {
       return NextResponse.json(
         { message: "Invalid credentials" },
         { status: 401 }
@@ -65,7 +66,6 @@ export async function POST(req: NextRequest) {
 
     const JWT_SECRET = process.env.JWT_SECRET;
     if (!JWT_SECRET) {
-      console.error("❌ JWT_SECRET not configured");
       return NextResponse.json(
         { message: "Server configuration error" },
         { status: 500 }
@@ -73,28 +73,45 @@ export async function POST(req: NextRequest) {
     }
 
     const userId = String(user._id ?? user.id);
+
     const token = jwt.sign(
       {
         sub: userId,
         email: user.email ?? "",
         name: user.name ?? "",
+        role: user.role,
       },
       JWT_SECRET,
-      { expiresIn: "1h" }
+      { expiresIn: MAX_AGE } // seconds
     );
 
-    return NextResponse.json({
-      token,
+    const res = NextResponse.json({
+      ok: true,
       user: {
         id: userId,
         name: user.name ?? "",
         email: user.email ?? "",
+        role: user.role,
       },
+      token,
       message: "Login successful",
     });
+
+    res.cookies.set("auth_token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: MAX_AGE,
+    });
+
+    if (process.env.NODE_ENV !== "production") {
+      res.headers.set("x-dev-token", token);
+    }
+
+    return res;
   } catch (err) {
     if (err instanceof ZodError) {
-      console.log("❌ Validation error:", err.issues);
       return NextResponse.json(
         {
           message: "Validation failed",
@@ -106,16 +123,6 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-
-    console.error("❌ Login error:", err);
-    return NextResponse.json(
-      {
-        message: "Server error",
-        ...(process.env.NODE_ENV === "development" && {
-          error: err instanceof Error ? err.message : "Unknown error",
-        }),
-      },
-      { status: 500 }
-    );
+    return NextResponse.json({ message: "Server error" }, { status: 500 });
   }
 }

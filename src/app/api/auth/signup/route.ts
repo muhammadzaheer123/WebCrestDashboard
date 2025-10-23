@@ -1,99 +1,114 @@
 import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server"; // ✅ type-only
+import type { NextRequest } from "next/server";
 import jwt from "jsonwebtoken";
 import { z, ZodError } from "zod";
 import { connectDB } from "@/lib/db";
-import { getClientIp, isOfficeNetwork } from "@/lib/ip-utils";
+import { ensureOfficeGate } from "@/lib/ip";
 import User from "@/models/user.model";
 
 export const runtime = "nodejs";
 
-const SignupSchema = z
-  .object({
-    name: z
-      .string()
-      .min(2, "Name must be at least 2 characters")
-      .max(50, "Name must be less than 50 characters")
-      .regex(/^[a-zA-Z\s]+$/, "Name can only contain letters and spaces"),
-    email: z.string().email("Invalid email address").min(5).max(255),
-    password: z.string().min(6).max(100),
-    confirmPassword: z.string(),
-  })
-  .refine((d) => d.password === d.confirmPassword, {
-    message: "Passwords don't match",
-    path: ["confirmPassword"],
-  });
+export const RoleEnum = z.enum(["admin", "hr"]);
+export type Role = z.infer<typeof RoleEnum>;
+
+export const SignupSchema = z.object({
+  name: z.string().min(2, "Name is required"),
+  email: z.string().email("Invalid email"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+  role: RoleEnum,
+  invite: z.string().optional(),
+});
+
+const MAX_AGE = 60 * 60 * 8; // 8 hours
 
 export async function POST(req: NextRequest) {
   try {
-    const clientIp = getClientIp(req);
-    const allowed = isOfficeNetwork(clientIp);
-    console.log("Signup IP check:", { clientIp, allowed });
-
-    if (!allowed) {
+    // Office gate
+    const gate = ensureOfficeGate(req.headers);
+    if (!gate.ok) {
       return NextResponse.json(
-        { message: "Access restricted to office network" },
+        {
+          message: "Access restricted",
+          details: "Signup is only available from the office network",
+          ip: gate.ip,
+          reason: gate.reason,
+        },
         { status: 403 }
       );
     }
 
+    // Validate body
     const body = await req.json();
-    const { name, email, password } = SignupSchema.parse(body);
+    const parsed = SignupSchema.parse(body);
 
-    await connectDB();
+    const name = parsed.name.trim();
+    const email = parsed.email.toLowerCase().trim();
+    const password = parsed.password;
+    const role = parsed.role; // already "admin" | "hr" from z.enum
+    const invite = parsed.invite;
 
-    const normalizedEmail = email.trim().toLowerCase();
-    const exists = await User.findOne({ email: normalizedEmail });
-    if (exists) {
+    // Optional invite code enforcement
+    const INVITE_KEY = process.env.ADMIN_HR_INVITE_KEY;
+    if (INVITE_KEY && invite !== INVITE_KEY) {
       return NextResponse.json(
-        { message: "User already exists" },
-        { status: 400 }
+        { message: "Invalid or missing invite code" },
+        { status: 403 }
       );
     }
 
-    const user = new User({
-      name: name.trim(),
-      email: normalizedEmail,
-      password,
-    });
-    await user.save();
+    await connectDB();
+
+    // Duplicate check
+    const existing = await User.findOne({ email });
+    if (existing) {
+      return NextResponse.json(
+        { message: "User already exists" },
+        { status: 409 }
+      );
+    }
+
+    // Create user (pre('save') will hash password)
+    const user = await User.create({ name, email, password, role });
 
     const JWT_SECRET = process.env.JWT_SECRET;
     if (!JWT_SECRET) {
-      console.error("❌ JWT_SECRET not configured");
       return NextResponse.json(
         { message: "Server configuration error" },
         { status: 500 }
       );
     }
 
-    const userId = user.id;
-
+    const userId = String(user._id ?? user.id);
     const token = jwt.sign(
-      {
-        sub: userId,
-        email: user.email ?? "",
-        name: user.name ?? "",
-      },
+      { sub: userId, email: user.email ?? "", name: user.name ?? "", role },
       JWT_SECRET,
-      { expiresIn: "1h" }
+      { expiresIn: MAX_AGE }
     );
 
-    return NextResponse.json(
+    const res = NextResponse.json(
       {
-        token,
+        ok: true,
         user: {
           id: userId,
-          name: user.name,
-          email: user.email,
+          name: user.name ?? "",
+          email: user.email ?? "",
+          role,
         },
         message: "Registration successful",
       },
       { status: 201 }
     );
-  } catch (err) {
-    console.error("Signup error:", err);
 
+    res.cookies.set("token", token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: MAX_AGE,
+    });
+
+    return res;
+  } catch (err) {
     if (err instanceof ZodError) {
       return NextResponse.json(
         {
@@ -110,18 +125,11 @@ export async function POST(req: NextRequest) {
     if ((err as any)?.code === 11000) {
       return NextResponse.json(
         { message: "User already exists" },
-        { status: 400 }
+        { status: 409 }
       );
     }
 
-    return NextResponse.json(
-      {
-        message: "Server error",
-        ...(process.env.NODE_ENV !== "production" && {
-          error: err instanceof Error ? err.message : String(err),
-        }),
-      },
-      { status: 500 }
-    );
+    console.error("❌ Signup error:", err);
+    return NextResponse.json({ message: "Server error" }, { status: 500 });
   }
 }

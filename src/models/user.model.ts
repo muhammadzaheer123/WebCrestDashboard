@@ -5,6 +5,7 @@ export interface IUser extends Document {
   name: string;
   email: string;
   password: string;
+  role: string;
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
@@ -43,32 +44,23 @@ const UserSchema = new Schema<IUser, IUserModel>(
       minlength: [6, "Password must be at least 6 characters"],
       select: false,
     },
+    role: { type: String, enum: ["admin", "hr", "user"], default: "user" },
   },
   {
     timestamps: true,
   }
 );
 
-UserSchema.pre<IUser>("save", async function (next) {
+UserSchema.pre("save", async function (next) {
   if (!this.isModified("password")) return next();
-
-  try {
-    const salt = await bcrypt.genSalt(10);
-    this.password = await bcrypt.hash(this.password, salt);
-    next();
-  } catch (error: any) {
-    next(error);
-  }
+  const salt = await bcrypt.genSalt(10);
+  this.password = await bcrypt.hash(this.password, salt);
+  next();
 });
 
-UserSchema.methods.comparePassword = async function (
-  candidatePassword: string
-): Promise<boolean> {
-  return bcrypt.compare(candidatePassword, this.password);
+UserSchema.methods.comparePassword = function (candidate: string) {
+  return bcrypt.compare(candidate, this.password);
 };
 
-const User =
-  (mongoose.models.User as IUserModel) ||
-  mongoose.model<IUser, IUserModel>("User", UserSchema);
-
-export default User;
+export default mongoose.models.User ||
+  mongoose.model<IUser>("User", UserSchema);
