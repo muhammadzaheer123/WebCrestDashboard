@@ -30,7 +30,6 @@ function pickClientIpFromHeaders(headers: Headers): string | null {
     if (xri) return xri;
   }
 
-  // Fallbacks if not trusting a specific proxy
   if (xri) return xri;
   if (cf) return cf;
   if (xff) return xff.split(",")[0].trim();
@@ -50,7 +49,7 @@ export function getClientIpFromHeaders(headers: Headers): string | null {
   if (!ip && ALLOW_LOCALHOST) ip = "127.0.0.1";
 
   if (IP_DEBUG) {
-    console.log("🔍 IP resolve", {
+    console.log("IP resolve", {
       TRUST_PROXY,
       cf: readHeader(headers, "cf-connecting-ip"),
       xri: readHeader(headers, "x-real-ip"),
