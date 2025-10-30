@@ -44,7 +44,6 @@ export async function GET(req: NextRequest) {
 
   const query: any = status === "all" ? {} : { status };
   if (qstr) {
-    // search by reason / type; (user name/email joined below)
     query.$or = [
       { reason: { $regex: qstr, $options: "i" } },
       { type: { $regex: qstr, $options: "i" } },

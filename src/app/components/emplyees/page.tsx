@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 
+/* ===== Types ===== */
 type Role = "admin" | "hr" | "employee" | string;
 
 type EmployeeDoc = {
@@ -66,15 +67,23 @@ const buildQuery = (
 };
 
 /* ===== Page ===== */
-export default function EmployeesPage() {
-  // current user (for role-based permissions)
-  const [user, setUser] = useState<User | null>(null);
+export default function EmployeesClient({
+  initialUser,
+}: {
+  initialUser: User | null;
+}) {
+  // 1) Use server-provided user to avoid hydration flicker
+  const [user, setUser] = useState<User | null>(initialUser);
+
+  // Optional: still sync with localStorage as a fallback
   useEffect(() => {
+    if (user) return;
     try {
       const raw = localStorage.getItem("user");
       if (raw) setUser(JSON.parse(raw));
     } catch {}
-  }, []);
+  }, [user]);
+
   const canWrite = user?.role === "admin" || user?.role === "hr";
 
   // filters
@@ -109,7 +118,6 @@ export default function EmployeesPage() {
     setError(null);
     try {
       const res = await fetchJson(`/api/employees?${query}`);
-      // { success, message, data: { employees, pagination } }
       setRows(res?.data?.employees || []);
       setPagination(res?.data?.pagination || null);
     } catch (e: any) {
@@ -154,6 +162,14 @@ export default function EmployeesPage() {
     }
   };
 
+  // Consistent button visuals (no snap), interactivity via `disabled:`
+  const primaryBtn =
+    "rounded-xl px-5 py-2 font-medium shadow-lg bg-gradient-to-r from-[#BB37A4] to-[#4315DB] text-white hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed";
+  const outlineBtn =
+    "rounded-lg border border-[#BB37A4]/40 px-3 py-1.5 text-[#BB37A4] hover:bg-[#BB37A4]/20 disabled:opacity-50 disabled:cursor-not-allowed";
+  const dangerBtn =
+    "rounded-lg px-3 py-1.5 text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed";
+
   return (
     <div className="min-h-screen w-full bg-[#1C1039] text-white">
       <div className="mx-auto max-w-7xl px-4 py-8">
@@ -172,11 +188,7 @@ export default function EmployeesPage() {
             type="button"
             onClick={openCreate}
             disabled={!canWrite}
-            className={`rounded-xl px-5 py-2 font-medium shadow-lg transition ${
-              canWrite
-                ? "bg-gradient-to-r from-[#BB37A4] to-[#4315DB] text-white hover:opacity-90"
-                : "bg-gray-600/50 text-gray-300 cursor-not-allowed"
-            }`}
+            className={primaryBtn}
             title={
               canWrite ? "Create a new employee" : "Only Admin/HR can create"
             }
@@ -186,7 +198,7 @@ export default function EmployeesPage() {
         </header>
 
         {/* Filters */}
-        <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-5">
+        <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols=5 md:grid-cols-5">
           <div className="flex flex-col">
             <label className="text-sm text-[#c7b7ff]">Search</label>
             <input
@@ -227,14 +239,11 @@ export default function EmployeesPage() {
                 setRole("");
                 setPage(1);
               }}
-              className="w-full rounded-lg border border-[#BB37A4]/30 px-3 py-2 text-[#BB37A4] hover:bg-[#BB37A4]/20 md:w-auto"
+              className={outlineBtn}
             >
               Reset
             </button>
-            <button
-              onClick={() => loadData()}
-              className="w-full rounded-lg bg-gradient-to-r from-[#BB37A4] to-[#4315DB] px-3 py-2 text-white shadow hover:opacity-90 md:w-auto"
-            >
+            <button onClick={() => loadData()} className={primaryBtn}>
               Apply
             </button>
           </div>
@@ -329,11 +338,7 @@ export default function EmployeesPage() {
                           <button
                             onClick={() => openEdit(r)}
                             disabled={!canWrite}
-                            className={`rounded-lg border px-3 py-1.5 ${
-                              canWrite
-                                ? "border-[#BB37A4]/40 text-[#BB37A4] hover:bg-[#BB37A4]/20"
-                                : "border-gray-600/50 text-gray-400 cursor-not-allowed"
-                            }`}
+                            className={outlineBtn}
                             title={
                               canWrite
                                 ? "Edit employee"
@@ -345,11 +350,7 @@ export default function EmployeesPage() {
                           <button
                             onClick={() => onDelete(r._id)}
                             disabled={!canWrite}
-                            className={`rounded-lg px-3 py-1.5 text-white ${
-                              canWrite
-                                ? "bg-rose-600 hover:bg-rose-700"
-                                : "bg-gray-600/50 cursor-not-allowed"
-                            }`}
+                            className={dangerBtn}
                             title={
                               canWrite
                                 ? "Delete employee"
@@ -378,14 +379,14 @@ export default function EmployeesPage() {
                 <button
                   disabled={!pagination.hasPrev}
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  className="rounded-lg border border-[#BB37A4]/40 px-3 py-1.5 text-white disabled:opacity-50"
+                  className={outlineBtn}
                 >
                   Prev
                 </button>
                 <button
                   disabled={!pagination.hasNext}
                   onClick={() => setPage((p) => p + 1)}
-                  className="rounded-lg border border-[#BB37A4]/40 px-3 py-1.5 text-white disabled:opacity-50"
+                  className={outlineBtn}
                 >
                   Next
                 </button>
@@ -518,7 +519,6 @@ function EmployeeModal({
       role="dialog"
       aria-modal="true"
     >
-      {/* Backdrop */}
       <div
         className={`absolute inset-0 bg-black/40 transition-opacity ${
           open ? "opacity-100" : "opacity-0"
@@ -656,9 +656,7 @@ function EmployeeModal({
           <button
             onClick={submit}
             disabled={submitting || !canWrite}
-            className={`rounded-lg px-4 py-2 text-white disabled:opacity-60 ${
-              canWrite ? "bg-black" : "bg-gray-500"
-            }`}
+            className="rounded-lg px-4 py-2 text-white bg-black disabled:opacity-60"
             title={canWrite ? "" : "Only Admin/HR can save"}
           >
             {submitting ? "Saving…" : isEdit ? "Save Changes" : "Create"}

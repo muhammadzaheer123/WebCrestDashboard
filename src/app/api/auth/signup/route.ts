@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 import jwt from "jsonwebtoken";
 import { z, ZodError } from "zod";
 import { connectDB } from "@/lib/db";
-import { ensureOfficeGate } from "@/lib/ip";
+// import { ensureOfficeGate } from "@/lib/ip";
 import User from "@/models/user.model";
 
 export const runtime = "nodejs";
@@ -23,19 +23,18 @@ const MAX_AGE = 60 * 60 * 8; // 8 hours
 
 export async function POST(req: NextRequest) {
   try {
-    // Office gate
-    const gate = ensureOfficeGate(req.headers);
-    if (!gate.ok) {
-      return NextResponse.json(
-        {
-          message: "Access restricted",
-          details: "Signup is only available from the office network",
-          ip: gate.ip,
-          reason: gate.reason,
-        },
-        { status: 403 }
-      );
-    }
+    // const gate = ensureOfficeGate(req.headers);
+    // if (!gate.ok) {
+    //   return NextResponse.json(
+    //     {
+    //       message: "Access restricted",
+    //       details: "Signup is only available from the office network",
+    //       ip: gate.ip,
+    //       reason: gate.reason,
+    //     },
+    //     { status: 403 }
+    //   );
+    // }
 
     // Validate body
     const body = await req.json();

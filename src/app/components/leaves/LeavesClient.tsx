@@ -103,11 +103,21 @@ export default function LeavesClient() {
   const total = data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / limit));
 
+  /* ---- Styled helpers (consistent look) ---- */
+  const tabBase =
+    "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-transparent";
+  const counterBase = "text-[11px] leading-none px-1.5 py-0.5 rounded border";
+
   return (
     <div className="space-y-5">
-      {/* Controls */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div className="flex items-center gap-2">
+      {/* Header / Controls */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        {/* Segmented tabs */}
+        <div
+          className={`flex flex-wrap items-center gap-2 rounded-full bg-white/80 border border-white/60 shadow-sm px-1.5 py-1 backdrop-blur supports-[backdrop-filter]:bg-white/60 ${
+            isPending ? "opacity-90" : ""
+          }`}
+        >
           {TABS.map((t) => {
             const active = status === t;
             const count = data?.counts?.[t] ?? 0;
@@ -115,14 +125,20 @@ export default function LeavesClient() {
               <button
                 key={t}
                 onClick={() => onTab(t)}
-                className={`px-3 py-1.5 rounded-md text-sm transition border ${
+                className={
                   active
-                    ? "bg-white text-slate-900 border-slate-300 shadow-sm"
-                    : "bg-white/80 text-slate-700 border-slate-200 hover:bg-white"
-                } ${isPending ? "opacity-80" : ""}`}
+                    ? `${tabBase} bg-white text-slate-900 border-slate-300 shadow-sm`
+                    : `${tabBase} bg-white/60 text-slate-700 border-slate-200 hover:bg-white`
+                }
               >
                 <span className="capitalize">{t}</span>
-                <span className="ml-2 text-xs bg-slate-100 text-slate-700 border border-slate-200 px-1.5 py-0.5 rounded">
+                <span
+                  className={
+                    active
+                      ? `${counterBase} bg-slate-100 text-slate-800 border-slate-200`
+                      : `${counterBase} bg-white text-slate-600 border-slate-200`
+                  }
+                >
                   {count}
                 </span>
               </button>
@@ -130,6 +146,7 @@ export default function LeavesClient() {
           })}
         </div>
 
+        {/* Search */}
         <div className="relative">
           <input
             value={q}
@@ -138,12 +155,12 @@ export default function LeavesClient() {
               setPage(1);
             }}
             placeholder="Search reason, type, employee…"
-            className="w-[280px] sm:w-[360px] rounded-lg bg-white text-slate-900 border border-slate-300 px-3 py-2 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300 shadow-sm"
+            className="w-[280px] sm:w-[360px] rounded-full bg-white/90 text-slate-900 border border-slate-300 px-4 py-2.5 placeholder-slate-400 shadow-sm outline-none ring-0 focus:border-indigo-300 focus:ring-2 focus:ring-indigo-200"
           />
           {q ? (
             <button
               onClick={() => setQ("")}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full p-1 text-slate-500 hover:text-slate-700 hover:bg-slate-100"
               aria-label="Clear"
             >
               ✕
@@ -153,35 +170,36 @@ export default function LeavesClient() {
       </div>
 
       {/* Card */}
-      <div className="rounded-xl bg-white text-slate-900 border border-slate-200 shadow-md overflow-hidden">
+      <div className="rounded-2xl overflow-hidden border border-white/20 bg-white/90 text-slate-900 shadow-xl backdrop-blur supports-[backdrop-filter]:bg-white/70">
+        {/* Scroll container with sticky header */}
         <div className="max-h-[62vh] overflow-auto">
           <table className="min-w-full text-sm">
-            <thead className="sticky top-0 bg-slate-50/95 backdrop-blur border-b border-slate-200">
+            <thead className="sticky top-0 z-10 bg-slate-50/95 backdrop-blur border-b border-slate-200">
               <tr>
-                <th className="px-4 py-3 text-left font-semibold text-slate-700">
+                <th className="px-5 py-3 text-left font-semibold text-slate-700">
                   Employee
                 </th>
-                <th className="px-4 py-3 text-left font-semibold text-slate-700">
+                <th className="px-5 py-3 text-left font-semibold text-slate-700">
                   Type
                 </th>
-                <th className="px-4 py-3 text-left font-semibold text-slate-700">
+                <th className="px-5 py-3 text-left font-semibold text-slate-700">
                   Dates
                 </th>
-                <th className="px-4 py-3 text-left font-semibold text-slate-700">
+                <th className="px-5 py-3 text-left font-semibold text-slate-700">
                   Days
                 </th>
-                <th className="px-4 py-3 text-left font-semibold text-slate-700">
+                <th className="px-5 py-3 text-left font-semibold text-slate-700">
                   Reason
                 </th>
-                <th className="px-4 py-3 text-left font-semibold text-slate-700">
+                <th className="px-5 py-3 text-left font-semibold text-slate-700">
                   Status
                 </th>
-                <th className="px-4 py-3 text-left font-semibold text-slate-700">
+                <th className="px-5 py-3 text-left font-semibold text-slate-700">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="[&_td]:px-5 [&_td]:py-3">
               {isLoading ? (
                 <>
                   <SkeletonRow />
@@ -205,10 +223,10 @@ export default function LeavesClient() {
                   <tr
                     key={r._id}
                     className={`border-t border-slate-200 ${
-                      idx % 2 === 1 ? "bg-slate-50/60" : ""
-                    } hover:bg-slate-50`}
+                      idx % 2 === 1 ? "bg-slate-50/60" : "bg-white/50"
+                    } hover:bg-slate-50 transition-colors`}
                   >
-                    <td className="px-4 py-3">
+                    <td>
                       <div className="font-medium">
                         {r.user?.name ?? r.userId}
                       </div>
@@ -216,35 +234,32 @@ export default function LeavesClient() {
                         {r.user?.email}
                       </div>
                     </td>
-                    <td className="px-4 py-3 capitalize">{r.type}</td>
-                    <td className="px-4 py-3">
+                    <td className="capitalize">{r.type}</td>
+                    <td>
                       {new Date(r.startDate).toLocaleDateString()} →{" "}
                       {new Date(r.endDate).toLocaleDateString()}
                       {r.isHalfDay ? ` (${r.halfDayPart} half)` : ""}
                     </td>
-                    <td className="px-4 py-3">{r.daysRequested}</td>
-                    <td
-                      className="px-4 py-3 max-w-[360px] truncate"
-                      title={r.reason}
-                    >
+                    <td>{r.daysRequested}</td>
+                    <td className="max-w-[360px] truncate" title={r.reason}>
                       {r.reason}
                     </td>
-                    <td className="px-4 py-3">
+                    <td>
                       <Badge status={r.status} />
                     </td>
-                    <td className="px-4 py-3">
+                    <td>
                       {r.status === "pending" ? (
                         <div className="flex gap-2">
                           <button
                             onClick={() => act(r._id, "approve")}
-                            className="px-3 py-1.5 rounded-md bg-emerald-600 text-white hover:bg-emerald-700 transition shadow-sm"
+                            className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 focus-visible:ring-2 focus-visible:ring-emerald-300 focus:outline-none shadow-sm transition"
                             title="Approve"
                           >
                             Approve
                           </button>
                           <button
                             onClick={() => act(r._id, "reject")}
-                            className="px-3 py-1.5 rounded-md bg-rose-600 text-white hover:bg-rose-700 transition shadow-sm"
+                            className="px-3 py-1.5 rounded-lg bg-rose-600 text-white hover:bg-rose-700 focus-visible:ring-2 focus-visible:ring-rose-300 focus:outline-none shadow-sm transition"
                             title="Reject"
                           >
                             Reject
@@ -262,17 +277,14 @@ export default function LeavesClient() {
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200 bg-slate-50">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-5 py-4 border-t border-slate-200 bg-slate-50/90">
           <div className="text-xs text-slate-600">
             Page{" "}
             <span className="font-semibold text-slate-800">
               {data?.page ?? 1}
             </span>{" "}
             of{" "}
-            <span className="font-semibold text-slate-800">
-              {Math.max(1, Math.ceil((data?.total ?? 0) / (limit || 10)))}
-            </span>{" "}
-            •{" "}
+            <span className="font-semibold text-slate-800">{totalPages}</span> •{" "}
             <span className="font-semibold text-slate-800">
               {data?.total ?? 0}
             </span>{" "}
@@ -282,23 +294,49 @@ export default function LeavesClient() {
             <button
               disabled={(data?.page ?? 1) <= 1}
               onClick={() => setPage((p) => Math.max(1, p - 1))}
-              className="px-3 py-1.5 rounded-md border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-50"
+              className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-indigo-300 focus:outline-none"
             >
               Prev
             </button>
             <button
-              disabled={
-                (data?.page ?? 1) >=
-                Math.max(1, Math.ceil((data?.total ?? 0) / (limit || 10)))
-              }
+              disabled={(data?.page ?? 1) >= totalPages}
               onClick={() => setPage((p) => p + 1)}
-              className="px-3 py-1.5 rounded-md border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-50"
+              className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-indigo-300 focus:outline-none"
             >
               Next
             </button>
           </div>
         </div>
       </div>
+
+      {/* Mobile cards (optional — uncomment to show list on <md)
+      <div className="grid gap-3 md:hidden">
+        {(isLoading ? Array.from({length:3}).map((_,i)=>i) : data?.data || []).map((r:any,i:number)=>(
+          <div key={r?._id ?? i} className="rounded-xl border border-white/20 bg-white/90 p-4 shadow">
+            <div className="flex items-center justify-between">
+              <div className="font-semibold">{r?.user?.name ?? r?.userId}</div>
+              <Badge status={r?.status} />
+            </div>
+            <div className="text-xs text-slate-600 mt-1">{r?.user?.email}</div>
+            <div className="mt-3 text-sm">
+              <div className="capitalize">Type: <span className="font-medium">{r?.type}</span></div>
+              <div>
+                Dates: {new Date(r.startDate).toLocaleDateString()} → {new Date(r.endDate).toLocaleDateString()}
+                {r.isHalfDay ? ` (${r.halfDayPart} half)` : ""}
+              </div>
+              <div>Days: {r?.daysRequested}</div>
+              {r?.reason && <div className="truncate" title={r.reason}>Reason: {r.reason}</div>}
+            </div>
+            {r?.status === "pending" && (
+              <div className="mt-3 flex gap-2">
+                <button onClick={()=>act(r._id,"approve")} className="px-3 py-1.5 rounded-md bg-emerald-600 text-white">Approve</button>
+                <button onClick={()=>act(r._id,"reject")} className="px-3 py-1.5 rounded-md bg-rose-600 text-white">Reject</button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      */}
     </div>
   );
 }

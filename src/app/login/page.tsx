@@ -19,6 +19,7 @@ export default function LoginPage() {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ email, password }),
       });
 
@@ -33,7 +34,8 @@ export default function LoginPage() {
       }
       if (res.ok) {
         localStorage.setItem("user", JSON.stringify(data.user));
-        router.push("/admin/dashboard");
+        router.replace("/admin/dashboard");
+        console.log("Account Login Successfully");
       } else {
         setError(data.message || "Login failed");
       }
