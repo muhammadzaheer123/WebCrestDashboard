@@ -9,7 +9,7 @@ if (!JWT_SECRET) throw new Error("JWT_SECRET not set");
 
 export function signToken(
   payload: object,
-  expiresIn: string | number = "1h"
+  expiresIn: string | number = "1h",
 ): string {
   return jwt.sign(payload, JWT_SECRET as string, { expiresIn } as SignOptions);
 }

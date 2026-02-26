@@ -20,16 +20,18 @@ declare module "express-serve-static-core" {
 }
 
 const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET) {
-  throw new Error("JWT_SECRET is not defined in environment variables");
-}
+if (!JWT_SECRET)
+  throw new Error("❌ JWT_SECRET is not defined in environment variables");
 
 function extractToken(req: Request): string | null {
   const auth = req.headers.authorization;
   if (auth && auth.toLowerCase().startsWith("bearer ")) {
     return auth.slice(7).trim();
   }
-  const cookieToken = (req as any).cookies?.access_token;
+
+  // support both cookie names
+  const cookies = (req as any).cookies;
+  const cookieToken = cookies?.token || cookies?.access_token;
   if (cookieToken) return cookieToken;
 
   const xToken = req.headers["x-access-token"];
@@ -44,23 +46,23 @@ export const authGuard = (req: Request, res: Response, next: NextFunction) => {
     if (!token) return res.status(401).json({ message: "No token provided" });
 
     const raw = jwt.verify(token, JWT_SECRET) as string | JwtPayload;
-
     if (typeof raw === "string") {
       return res.status(401).json({ message: "Invalid token payload" });
     }
 
     const payload = raw as AuthTokenPayload;
     const userId = payload.id ?? payload.sub;
+
     if (!userId) {
       return res
         .status(401)
         .json({ message: "Token missing user id (sub/id)" });
     }
 
-    req.userId = userId;
-    req.user = { id: userId, email: payload.email, role: payload.role };
+    req.userId = String(userId);
+    req.user = { id: String(userId), email: payload.email, role: payload.role };
 
-    next();
+    return next();
   } catch (err) {
     if (err instanceof TokenExpiredError) {
       return res.status(401).json({ message: "Token expired" });
@@ -80,6 +82,6 @@ export const requireRoles = (...roles: string[]) => {
         .status(403)
         .json({ message: "Forbidden: insufficient permissions" });
     }
-    next();
+    return next();
   };
 };
