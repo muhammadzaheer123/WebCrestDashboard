@@ -1,5 +1,4 @@
 "use client";
-
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -97,11 +96,8 @@ export default function Topbar({
           </button>
 
           <div className="leading-tight">
-            <div className="text-[18px] font-semibold text-white">
+            <div className="text-[20px] font-semibold text-white">
               {meta.title}
-            </div>
-            <div className="text-xs text-white/55">
-              {meta.subtitle ?? "Manage records and activity"}
             </div>
           </div>
         </div>
@@ -122,14 +118,14 @@ export default function Topbar({
             <button
               type="button"
               onClick={() => setOpen((s) => !s)}
-              className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-white/85 hover:bg-white/10"
+              className="flex items-center gap-2 rounded-[13px] border border-white/10 bg-white/5 px-3 py-1.5 text-white/85 hover:bg-white/10"
               title={user?.email || "Account"}
             >
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[#7C3AED] to-[#111827] ring-1 ring-white/10 text-xs font-semibold">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-[#7C3AED] to-[#111827] ring-1 ring-white/10 text-xs font-semibold">
                 {initials(user)}
               </span>
               <span className="max-w-[220px] truncate text-sm text-white/85">
-                {user?.email || "account@email.com"}
+                {user?.name || "account@email.com"}
               </span>
               <ChevronDown className="h-4 w-4 text-white/60" />
             </button>

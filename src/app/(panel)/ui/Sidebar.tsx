@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import type { LucideIcon } from "lucide-react";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import { useRouter } from "next/router";
+import Image from "next/image";
 
 export type NavItem = {
   id: string;
@@ -29,7 +31,6 @@ export default function Sidebar({
   setMobileOpen: (v: boolean | ((p: boolean) => boolean)) => void;
   brandTitle: string;
 }) {
-  // lock body scroll while mobile drawer open
   useEffect(() => {
     if (!mobileOpen) return;
     const prev = document.body.style.overflow;
@@ -109,7 +110,15 @@ export default function Sidebar({
       >
         <div className="flex items-center justify-between px-4 pt-5">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-[#7C3AED] to-[#111827] ring-1 ring-white/10" />
+            <span className="w-12 h-10 rounded-[8px] bg-gradient-to-br from-[#7C3AED] to-[#1f283e]">
+              <Image
+                src="/assets/images/Webcrest.png"
+                alt=""
+                width={100}
+                height={100}
+                className="mt-2 ml-1 w-10 h-auto"
+              />
+            </span>
             {!collapsed && (
               <div className="leading-tight">
                 <div className="text-sm font-semibold text-white">

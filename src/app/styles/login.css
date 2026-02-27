@@ -3,35 +3,6 @@
   --auth-text: 255 255 255;
 }
 
-/* Prevent Chrome autofill turning inputs white */
-.Admin-Login input,
-.Admin-Login select,
-.Admin-Login textarea {
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.25);
-}
-
-/* Autofill override */
-.Admin-Login input:-webkit-autofill,
-.Admin-Login input:-webkit-autofill:hover,
-.Admin-Login input:-webkit-autofill:focus,
-.Admin-Login textarea:-webkit-autofill,
-.Admin-Login textarea:-webkit-autofill:hover,
-.Admin-Login textarea:-webkit-autofill:focus,
-.Admin-Login select:-webkit-autofill,
-.Admin-Login select:-webkit-autofill:hover,
-.Admin-Login select:-webkit-autofill:focus {
-  -webkit-text-fill-color: #fff !important;
-
-  /* This is the main fix: paint your glass bg inside autofill */
-  -webkit-box-shadow: 0 0 0px 1000px rgba(255, 255, 255, 0.08) inset !important;
-  box-shadow: 0 0 0px 1000px rgba(255, 255, 255, 0.08) inset !important;
-
-  transition: background-color 999999s ease-in-out 0s;
-  caret-color: #fff !important;
-}
-
 .Admin-Login {
   min-height: 100vh;
   width: 100%;
