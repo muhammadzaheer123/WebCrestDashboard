@@ -28,12 +28,12 @@ export async function connectDB() {
         w: "majority",
       })
       .then((m) => {
-        console.log(`✅ Mongo connected to "${m.connection.name}"`);
-        console.log(`✅ Connection state: ${m.connection.readyState}`);
+        console.log(`Mongo connected to "${m.connection.name}"`);
+        console.log(`Connection state: ${m.connection.readyState}`);
         return m;
       })
       .catch((error) => {
-        console.error("❌ MongoDB connection failed:", error);
+        console.error("MongoDB connection failed:", error);
         global._mongooseConn = undefined;
         throw error;
       });

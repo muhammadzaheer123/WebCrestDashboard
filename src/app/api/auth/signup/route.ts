@@ -46,15 +46,6 @@ export async function POST(req: NextRequest) {
     const role = parsed.role; // already "admin" | "hr" from z.enum
     const invite = parsed.invite;
 
-    // Optional invite code enforcement
-    const INVITE_KEY = process.env.ADMIN_HR_INVITE_KEY;
-    if (INVITE_KEY && invite !== INVITE_KEY) {
-      return NextResponse.json(
-        { message: "Invalid or missing invite code" },
-        { status: 403 }
-      );
-    }
-
     await connectDB();
 
     // Duplicate check
@@ -62,7 +53,7 @@ export async function POST(req: NextRequest) {
     if (existing) {
       return NextResponse.json(
         { message: "User already exists" },
-        { status: 409 }
+        { status: 409 },
       );
     }
 
@@ -73,7 +64,7 @@ export async function POST(req: NextRequest) {
     if (!JWT_SECRET) {
       return NextResponse.json(
         { message: "Server configuration error" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
@@ -81,7 +72,7 @@ export async function POST(req: NextRequest) {
     const token = jwt.sign(
       { sub: userId, email: user.email ?? "", name: user.name ?? "", role },
       JWT_SECRET,
-      { expiresIn: MAX_AGE }
+      { expiresIn: MAX_AGE },
     );
 
     const res = NextResponse.json(
@@ -95,12 +86,12 @@ export async function POST(req: NextRequest) {
         },
         message: "Registration successful",
       },
-      { status: 201 }
+      { status: 201 },
     );
 
     res.cookies.set("token", token, {
       httpOnly: true,
-      secure: true,
+      secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       path: "/",
       maxAge: MAX_AGE,
@@ -117,14 +108,14 @@ export async function POST(req: NextRequest) {
             message: i.message,
           })),
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     if ((err as any)?.code === 11000) {
       return NextResponse.json(
         { message: "User already exists" },
-        { status: 409 }
+        { status: 409 },
       );
     }
 

@@ -5,7 +5,7 @@ export interface IUser extends Document {
   name: string;
   email: string;
   password: string;
-  role: string;
+  role: "admin" | "hr" | "user";
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
@@ -32,9 +32,10 @@ const UserSchema = new Schema<IUser, IUserModel>(
       unique: true,
       lowercase: true,
       trim: true,
+      index: true,
       validate: {
         validator: (email: string) =>
-          /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/.test(email),
+          /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,})+$/.test(email),
         message: "Invalid email address",
       },
     },
@@ -46,15 +47,12 @@ const UserSchema = new Schema<IUser, IUserModel>(
     },
     role: { type: String, enum: ["admin", "hr", "user"], default: "user" },
   },
-  {
-    timestamps: true,
-  }
+  { timestamps: true },
 );
 
 UserSchema.pre("save", async function (next) {
   if (!this.isModified("password")) return next();
-  const salt = await bcrypt.genSalt(10);
-  this.password = await bcrypt.hash(this.password, salt);
+  this.password = await bcrypt.hash(this.password, 10);
   next();
 });
 
