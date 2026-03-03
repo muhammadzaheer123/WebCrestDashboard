@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
           success: false,
           error: "Employee ID and Date are required",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
           error: "Validation failed",
           details: errors,
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
         error: "Failed to create manual attendance",
         details: error.message,
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

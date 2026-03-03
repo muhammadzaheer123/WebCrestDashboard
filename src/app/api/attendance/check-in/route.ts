@@ -5,7 +5,7 @@ import Attendance from "@/models/attendance.model";
 import { connectDB } from "@/lib/db";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
-import { ensureOfficeGate } from "@/lib/ip"; 
+import { ensureOfficeGate } from "@/lib/ip";
 
 export const runtime = "nodejs";
 
@@ -35,7 +35,7 @@ export async function POST(req: Request) {
           reason: gate.reason,
           ip: gate.ip ?? undefined,
         },
-        { status: 403 }
+        { status: 403 },
       );
     }
 
@@ -44,13 +44,13 @@ export async function POST(req: Request) {
     if (!empId) {
       return NextResponse.json(
         { success: false, message: "Unauthenticated" },
-        { status: 401 }
+        { status: 401 },
       );
     }
     if (!mongoose.Types.ObjectId.isValid(empId)) {
       return NextResponse.json(
         { success: false, message: "Invalid employee id in token" },
-        { status: 400 }
+        { status: 400 },
       );
     }
     const employeeObjectId = new mongoose.Types.ObjectId(empId);
@@ -75,7 +75,7 @@ export async function POST(req: Request) {
           date: today,
           employeeId: empId, // ⬅️ include employee id
         },
-        { status: 409 }
+        { status: 409 },
       );
     }
 
@@ -101,7 +101,7 @@ export async function POST(req: Request) {
           recordId: created._id,
           employeeId: empId, // ⬅️ include employee id
         },
-        { status: 200 }
+        { status: 200 },
       );
     }
 
@@ -119,7 +119,7 @@ export async function POST(req: Request) {
         recordId: doc._id,
         employeeId: empId, // ⬅️ include employee id
       },
-      { status: 200 }
+      { status: 200 },
     );
   } catch (e: any) {
     if (process.env.NODE_ENV !== "production") {
@@ -127,7 +127,7 @@ export async function POST(req: Request) {
     }
     return NextResponse.json(
       { success: false, message: "Server error (check-in)" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

@@ -7,6 +7,7 @@ import {
   Users,
   SlidersHorizontal,
   Settings,
+  Notebook,
 } from "lucide-react";
 
 import Sidebar, { NavItem } from "./Sidebar";
@@ -52,6 +53,12 @@ export default function AdminShell({
         label: "Adjustments",
         icon: SlidersHorizontal,
         path: "/adjustments",
+      },
+      {
+        id: "Attendance",
+        label: "Attendance",
+        icon: Notebook,
+        path: "/attendance",
       },
       { id: "settings", label: "Settings", icon: Settings, path: "/settings" },
     ],

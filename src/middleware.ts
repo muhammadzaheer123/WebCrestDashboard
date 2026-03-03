@@ -21,22 +21,22 @@ export async function middleware(req: NextRequest) {
   const isProtected =
     path.startsWith("/admin") || path.startsWith("/dashboard");
 
-  if (isProtected) {
-    if (!token) {
-      return NextResponse.redirect(new URL("/login", req.url));
-    }
+  // if (isProtected) {
+  //   if (!token) {
+  //     return NextResponse.redirect(new URL("/login", req.url));
+  //   }
 
-    try {
-      const { payload } = await jwtVerify(token, key);
-      const role = (payload as RolePayload).role;
+  //   try {
+  //     const { payload } = await jwtVerify(token, key);
+  //     const role = (payload as RolePayload).role;
 
-      if (role !== "admin" && role !== "hr") {
-        return NextResponse.redirect(new URL("/login", req.url));
-      }
-    } catch {
-      return NextResponse.redirect(new URL("/login", req.url));
-    }
-  }
+  //     if (role !== "admin" && role !== "hr") {
+  //       return NextResponse.redirect(new URL("/login", req.url));
+  //     }
+  //   } catch {
+  //     return NextResponse.redirect(new URL("/login", req.url));
+  //   }
+  // }
 
   if (path === "/login" && token) {
     try {

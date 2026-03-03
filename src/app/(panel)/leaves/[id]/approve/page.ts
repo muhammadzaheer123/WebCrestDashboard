@@ -25,7 +25,7 @@ function getUser(req: NextRequest) {
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: { id: string } },
 ) {
   const me = getUser(req);
   if (!me || !ALLOWED.has(me.role)) {
@@ -46,7 +46,7 @@ export async function PATCH(
       await sess.abortTransaction();
       return NextResponse.json(
         { message: "Only pending can be approved" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -56,13 +56,13 @@ export async function PATCH(
       const updated = await LeaveBalance.findOneAndUpdate(
         { userId: leave.userId, [field]: { $gte: leave.daysRequested } },
         { $inc: { [field]: -leave.daysRequested } },
-        { new: true, session: sess }
+        { new: true, session: sess },
       );
       if (!updated) {
         await sess.abortTransaction();
         return NextResponse.json(
           { message: `Insufficient ${leave.type} balance` },
-          { status: 400 }
+          { status: 400 },
         );
       }
     }

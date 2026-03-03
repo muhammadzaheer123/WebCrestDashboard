@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import { z, ZodError } from "zod";
-import { connectDB } from "@/lib/db";
+import { connectDB } from "../../../../lib/db";
 import User from "@/models/user.model";
 
 export const runtime = "nodejs";
