@@ -270,8 +270,6 @@ export default function EmployeeModal({
   );
 }
 
-/* ===== Tiny atoms ===== */
-
 function Field({
   label,
   children,
