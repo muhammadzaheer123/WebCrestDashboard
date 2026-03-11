@@ -19,43 +19,64 @@ export default function AttendanceStatus({ data }: any) {
       : "Checked Out";
 
   const statusColor = isOnBreak
-    ? "text-yellow-400"
+    ? "text-amber-400"
     : isCheckedIn
-      ? "text-green-500"
-      : "text-red-500";
+      ? "text-emerald-400"
+      : "text-red-400";
 
   const dotColor = isOnBreak
-    ? "bg-yellow-400 shadow-[0_0_10px_#facc15]"
+    ? "bg-amber-400 shadow-[0_0_8px_#fbbf24]"
     : isCheckedIn
-      ? "bg-green-500 shadow-[0_0_10px_#22c55e]"
-      : "bg-red-500 shadow-[0_0_10px_#ef4444]";
+      ? "bg-emerald-400 shadow-[0_0_8px_#34d399]"
+      : "bg-red-400 shadow-[0_0_8px_#f87171]";
+
+  const glowBg = isOnBreak
+    ? "from-amber-500/10 to-transparent"
+    : isCheckedIn
+      ? "from-emerald-500/10 to-transparent"
+      : "from-red-500/10 to-transparent";
 
   return (
-    <div className="bg-[#120a1f] border border-[#1f142e] rounded-2xl p-8 shadow-xl relative overflow-hidden">
-      <div className="flex justify-between items-center mb-6">
-        <span className="text-gray-400 text-sm font-medium">
-          Current Status
-        </span>
+    <div className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl">
+      {/* Subtle status glow overlay */}
+      <div
+        className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${glowBg}`}
+      />
 
-        <div className="flex items-center gap-2">
-          <div className={`w-2 h-2 rounded-full ${dotColor}`} />
-
-          <span className={statusColor}>{statusText}</span>
+      <div className="relative">
+        <div className="flex items-center justify-between mb-5">
+          <p className="text-xs font-medium text-zinc-400 uppercase tracking-widest">
+            Current Status
+          </p>
+          <div className="flex items-center gap-2 rounded-full border border-white/10 bg-black/20 px-3 py-1.5">
+            <div className={`h-1.5 w-1.5 rounded-full ${dotColor}`} />
+            <span className={`text-xs font-medium ${statusColor}`}>
+              {statusText}
+            </span>
+          </div>
         </div>
-      </div>
 
-      <div className="text-6xl font-bold tracking-tighter mb-2">
-        {currentTime.toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: true,
-        })}
-      </div>
+        <div className="text-5xl font-semibold tracking-tight tabular-nums mb-2">
+          {currentTime.toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+            hour12: true,
+          })}
+        </div>
 
-      <p className="text-gray-500 text-xs tracking-widest uppercase">
-        LAST ACTIVITY:{" "}
-        {data?.checkIn ? new Date(data.checkIn).toLocaleTimeString() : "--:--"}
-      </p>
+        <p className="text-xs text-zinc-500 uppercase tracking-widest mt-3">
+          Last Activity:{" "}
+          <span className="text-zinc-400">
+            {data?.checkIn
+              ? new Date(data.checkIn).toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })
+              : "--:--"}
+          </span>
+        </p>
+      </div>
     </div>
   );
 }
