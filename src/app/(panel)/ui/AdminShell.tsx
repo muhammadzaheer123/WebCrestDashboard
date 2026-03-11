@@ -1,5 +1,4 @@
 "use client";
-
 import React, { useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 import {
@@ -8,6 +7,7 @@ import {
   SlidersHorizontal,
   Settings,
   Notebook,
+  Calendar,
 } from "lucide-react";
 
 import Sidebar, { NavItem } from "./Sidebar";
@@ -17,7 +17,7 @@ type User = {
   id: string;
   name?: string;
   email: string;
-  role?: string;
+  role?: "admin" | "hr" | "employee";
 };
 
 export default function AdminShell({
@@ -38,16 +38,44 @@ export default function AdminShell({
     } catch {}
   }, []);
 
-  // ✅ Sidebar nav items (NO URL text under label)
-  const navItems: NavItem[] = useMemo(
-    () => [
+  // ✅ ROLE BASED NAV
+  const navItems: NavItem[] = useMemo(() => {
+    if (user?.role === "employee") {
+      return [
+        {
+          id: "attendance",
+          label: "Attendance",
+          icon: Notebook,
+          path: "/attendance",
+        },
+        {
+          id: "employee-adjustments",
+          label: "Company Policies",
+          icon: SlidersHorizontal,
+          path: "/employee-adjustments",
+        },
+        {
+          id: "my-leaves",
+          label: "My Leaves",
+          icon: Calendar,
+          path: "/my-leaves",
+        },
+      ];
+    }
+
+    return [
       {
         id: "dashboard",
         label: "Dashboard",
         icon: LayoutDashboard,
         path: "/dashboard",
       },
-      { id: "employees", label: "Employees", icon: Users, path: "/employees" },
+      {
+        id: "employees",
+        label: "Employees",
+        icon: Users,
+        path: "/employees",
+      },
       {
         id: "adjustments",
         label: "Adjustments",
@@ -55,17 +83,26 @@ export default function AdminShell({
         path: "/adjustments",
       },
       {
-        id: "Attendance",
+        id: "attendance",
         label: "Attendance",
         icon: Notebook,
         path: "/attendance",
       },
-      { id: "settings", label: "Settings", icon: Settings, path: "/settings" },
-    ],
-    [],
-  );
+      {
+        id: "leaves",
+        label: "Leave Management",
+        icon: Calendar,
+        path: "/leaves",
+      },
+      {
+        id: "settings",
+        label: "Settings",
+        icon: Settings,
+        path: "/settings",
+      },
+    ];
+  }, [user]);
 
-  // ✅ Title map for topbar (raw "/dashboard" nahi dikhayega)
   const titleMap = useMemo(
     () => ({
       "/dashboard": {
@@ -78,17 +115,31 @@ export default function AdminShell({
       },
       "/adjustments": {
         title: "Adjustments",
-        subtitle: "Track adjustments and updates.",
+        subtitle: "Configure company policies.",
+      },
+      "/attendance": {
+        title: "Attendance",
+        subtitle: "Track employee attendance and work hours.",
       },
       "/settings": {
         title: "Settings",
         subtitle: "Configure system preferences.",
       },
+      "/leaves": {
+        title: "Leave Management",
+        subtitle: "Manage employee leave requests.",
+      },
+      "/my-leaves": {
+        title: "My Leaves",
+        subtitle: "Submit and track your leave requests.",
+      },
+      "/employee-adjustments": {
+        title: "Company Policies",
+        subtitle: "View company HR adjustments and policies.",
+      },
     }),
     [],
   );
-
-  const mainPad = collapsed ? "md:pl-[86px]" : "md:pl-[280px]";
 
   return (
     <div className="min-h-screen bg-[#07030F] text-white">

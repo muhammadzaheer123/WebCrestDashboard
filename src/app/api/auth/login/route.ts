@@ -4,7 +4,7 @@ import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import { z, ZodError } from "zod";
 import { connectDB } from "../../../../lib/db";
-import User from "@/models/user.model";
+import Employee from "../../../../models/Employee";
 
 export const runtime = "nodejs";
 
@@ -24,39 +24,35 @@ export async function POST(req: NextRequest) {
 
     await connectDB();
 
-    // IMPORTANT: if password is select:false in schema, you MUST select it
-    const user = await User.findOne({ email: normalizedEmail }).select(
-      "+password +role +name +email",
+    const user = await Employee.findOne({ email: normalizedEmail }).select(
+      "+password +role +name +email +isActive",
     );
 
     if (!user || !user.password) {
       return NextResponse.json(
-        { message: "Invalid credentials" },
+        { message: "Invalid email or password" },
         { status: 401 },
       );
     }
-
-    console.log("LOGIN:", {
-      email: normalizedEmail,
-      hasUser: !!user,
-      hasPasswordField: !!user?.password,
-      role: user?.role,
-    });
 
     const isMatch = await bcrypt.compare(password, user.password);
+
     if (!isMatch) {
       return NextResponse.json(
-        { message: "Invalid credentials" },
+        { message: "Invalid email or password" },
         { status: 401 },
       );
     }
 
-    // role gate
-    if (user.role !== "admin" && user.role !== "hr") {
-      return NextResponse.json({ message: "Access denied" }, { status: 403 });
+    if (!user.isActive) {
+      return NextResponse.json(
+        { message: "Account is inactive. Contact admin." },
+        { status: 403 },
+      );
     }
 
     const JWT_SECRET = process.env.JWT_SECRET;
+
     if (!JWT_SECRET) {
       return NextResponse.json(
         { message: "Server configuration error" },
@@ -74,24 +70,26 @@ export async function POST(req: NextRequest) {
         role: user.role,
       },
       JWT_SECRET,
-      { expiresIn: MAX_AGE },
+      {
+        expiresIn: MAX_AGE,
+        algorithm: "HS256",
+      },
     );
 
     const res = NextResponse.json(
       {
         ok: true,
+        message: "Login successful",
         user: {
           id: userId,
           name: user.name ?? "",
           email: user.email ?? "",
           role: user.role,
         },
-        message: "Login successful",
       },
       { status: 200 },
     );
 
-    // IMPORTANT: secure true breaks cookies on localhost
     res.cookies.set("token", token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
@@ -118,6 +116,7 @@ export async function POST(req: NextRequest) {
     }
 
     console.error("Login error:", err);
+
     return NextResponse.json({ message: "Server error" }, { status: 500 });
   }
 }

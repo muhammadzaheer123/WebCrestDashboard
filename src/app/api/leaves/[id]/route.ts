@@ -5,8 +5,9 @@ import { getAuthUser } from "@/lib/auth"; // placeholder
 
 export async function PATCH(
   req: Request,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
+  const { id } = await params;
   await dbConnect();
   const user = await getAuthUser();
 
@@ -22,7 +23,7 @@ export async function PATCH(
   }
 
   const updated = await Leave.findByIdAndUpdate(
-    params.id,
+    id,
     {
       status,
       hrComment: hrComment ?? "",

@@ -29,10 +29,9 @@ export async function POST(request: NextRequest) {
           error: "Missing required fields",
           missingFields,
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
-
     const {
       name,
       email,
@@ -41,13 +40,21 @@ export async function POST(request: NextRequest) {
       designation,
       role = "employee",
       shift,
+      password,
     } = body;
+
+    if (!password) {
+      return NextResponse.json(
+        { error: "Password is required" },
+        { status: 400 },
+      );
+    }
 
     const existingEmployee = await Employee.findOne({ email });
     if (existingEmployee) {
       return NextResponse.json(
         { error: "Employee with this email already exists" },
-        { status: 409 } // 409 Conflict
+        { status: 409 }, // 409 Conflict
       );
     }
 
@@ -62,7 +69,7 @@ export async function POST(request: NextRequest) {
       designation,
       role,
       shift,
-      password: "temporary123",
+      password,
       qrCode,
     });
 
@@ -89,7 +96,7 @@ export async function POST(request: NextRequest) {
         message: "Employee created successfully",
         data: employeeResponse,
       },
-      { status: 201 }
+      { status: 201 },
     );
   } catch (error: any) {
     console.error("Error creating employee:", error);
@@ -102,7 +109,7 @@ export async function POST(request: NextRequest) {
           error: "Validation failed",
           details: errors,
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -112,7 +119,7 @@ export async function POST(request: NextRequest) {
           success: false,
           error: "Employee with this email or employee ID already exists",
         },
-        { status: 409 }
+        { status: 409 },
       );
     }
 
@@ -121,7 +128,7 @@ export async function POST(request: NextRequest) {
         success: false,
         error: "Internal server error",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -184,7 +191,7 @@ export async function GET(request: NextRequest) {
         success: false,
         error: "Failed to fetch employees",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -192,12 +199,12 @@ export async function GET(request: NextRequest) {
 // DELETE api
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     await connectDB();
 
-    const { id } = params;
+    const { id } = await params;
 
     if (!id.match(/^[0-9a-fA-F]{24}$/)) {
       return NextResponse.json(
@@ -205,14 +212,14 @@ export async function DELETE(
           success: false,
           error: "Invalid employee ID format",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     const employee = await Employee.findByIdAndUpdate(
       id,
       { isActive: false },
-      { new: true, runValidators: true }
+      { new: true, runValidators: true },
     ).select("-password -__v");
 
     if (!employee) {
@@ -221,7 +228,7 @@ export async function DELETE(
           success: false,
           error: "Employee not found",
         },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -243,7 +250,7 @@ export async function DELETE(
         success: false,
         error: "Failed to delete employee",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

@@ -3,7 +3,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Mail, Lock, EyeOff, Eye } from "lucide-react";
+import toast from "react-hot-toast";
 import "../../app/styles/login.css";
+import Link from "next/link";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -12,12 +14,12 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
 
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+
     setLoading(true);
-    setError("");
 
     try {
       const res = await fetch("/api/auth/login", {
@@ -27,22 +29,26 @@ export default function LoginPage() {
         body: JSON.stringify({ email, password }),
       });
 
-      const data = await res.json().catch(() => ({}));
+      const data = await res.json();
 
       if (!res.ok) {
-        const msg =
-          (Array.isArray((data as any)?.errors) &&
-            (data as any).errors[0]?.message) ||
-          (data as any)?.message ||
-          `Login failed (${res.status})`;
-        setError(msg);
+        toast.error(data.message || "Login failed");
         return;
       }
 
-      localStorage.setItem("user", JSON.stringify((data as any).user));
+      /* SAVE USER */
+      localStorage.setItem("user", JSON.stringify(data.user));
+
+      /* SAVE TOKEN */
+      if (data.token) {
+        localStorage.setItem("token", data.token);
+      }
+
+      toast.success("Login successful");
+
       router.replace("/dashboard");
-    } catch {
-      setError("Network error. Please try again.");
+    } catch (err) {
+      toast.error("Network error");
     } finally {
       setLoading(false);
     }
@@ -54,19 +60,18 @@ export default function LoginPage() {
         <h1 className="form-title">Login</h1>
         <p className="form-subtitle">Sign in to continue to the dashboard</p>
 
-        {error ? <div className="form-error">{error}</div> : null}
-
         <div className="field">
           <div className="label">Email</div>
+
           <div className="inputWrap">
             <Mail size={18} className="inputIcon" />
+
             <input
               className="input"
               type="email"
               placeholder="you@company.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              autoComplete="email"
               required
             />
           </div>
@@ -74,28 +79,36 @@ export default function LoginPage() {
 
         <div className="field">
           <div className="label">Password</div>
+
           <div className="inputWrap">
             <Lock size={18} className="inputIcon" />
+
             <input
               className="input"
               type={showPassword ? "text" : "password"}
               placeholder="Your password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
               required
             />
 
             <button
               type="button"
               className="inputAction"
-              onClick={() => setShowPassword((s) => !s)}
-              aria-label={showPassword ? "Hide password" : "Show password"}
-              title={showPassword ? "Hide password" : "Show password"}
+              onClick={() => setShowPassword(!showPassword)}
             >
               {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
             </button>
           </div>
+        </div>
+
+        <div className="flex justify-end align-middle text-end mb-3">
+          <Link
+            className="text-[14px] text-gray-400 font-sans hover:text-red-500 delay-150 duration-200"
+            href="forgot-password"
+          >
+            Forgot Password?
+          </Link>
         </div>
 
         <button className="primaryBtn" type="submit" disabled={loading}>
@@ -103,7 +116,7 @@ export default function LoginPage() {
         </button>
 
         <div className="formFooter">
-          Need an account? <a href="/signup">Create one</a>
+          Need an account? <a href="#">Contact to HR!</a>
         </div>
       </form>
     </div>

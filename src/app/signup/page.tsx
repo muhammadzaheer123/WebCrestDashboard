@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Mail, Lock, User, Shield, EyeOff, Eye } from "lucide-react";
+import toast from "react-hot-toast";
 import "../styles/login.css";
 
 type Role = "admin" | "hr";
@@ -16,12 +17,11 @@ export default function SignupPage() {
   const [password, setPassword] = useState("");
 
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
   async function handleSignup(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setError("");
+
     setLoading(true);
 
     try {
@@ -32,22 +32,24 @@ export default function SignupPage() {
         body: JSON.stringify({ name, email, password, role }),
       });
 
-      const data = await res.json().catch(() => ({}));
+      const data = await res.json();
 
       if (!res.ok) {
-        const msg =
-          (Array.isArray((data as any)?.errors) &&
-            (data as any).errors[0]?.message) ||
-          (data as any)?.message ||
-          `Signup failed (${res.status})`;
-        setError(msg);
+        toast.error(data.message || "Signup failed");
         return;
       }
 
-      localStorage.setItem("user", JSON.stringify((data as any).user));
+      localStorage.setItem("user", JSON.stringify(data.user));
+
+      if (data.token) {
+        localStorage.setItem("token", data.token);
+      }
+
+      toast.success("Account created successfully");
+
       router.replace("/dashboard");
     } catch {
-      setError("Network error. Please try again.");
+      toast.error("Network error");
     } finally {
       setLoading(false);
     }
@@ -57,21 +59,18 @@ export default function SignupPage() {
     <div className="Admin-Login">
       <form className="Admin-Login-Content" onSubmit={handleSignup}>
         <h1 className="form-title">Sign up</h1>
-        <p className="form-subtitle">Create an Admin/HR account</p>
-
-        {error ? <div className="form-error">{error}</div> : null}
+        <p className="form-subtitle">Create Admin / HR account</p>
 
         <div className="field">
           <div className="label">Full name</div>
+
           <div className="inputWrap">
             <User size={18} className="inputIcon" />
+
             <input
               className="input"
-              type="text"
-              placeholder="Full name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              autoComplete="name"
               required
             />
           </div>
@@ -79,15 +78,15 @@ export default function SignupPage() {
 
         <div className="field">
           <div className="label">Email</div>
+
           <div className="inputWrap">
             <Mail size={18} className="inputIcon" />
+
             <input
               className="input"
               type="email"
-              placeholder="you@company.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              autoComplete="email"
               required
             />
           </div>
@@ -95,13 +94,14 @@ export default function SignupPage() {
 
         <div className="field">
           <div className="label">Role</div>
+
           <div className="inputWrap">
             <Shield size={18} className="inputIcon" />
+
             <select
               className="select"
               value={role}
               onChange={(e) => setRole(e.target.value as Role)}
-              required
             >
               <option value="admin">Admin</option>
               <option value="hr">HR</option>
@@ -111,30 +111,29 @@ export default function SignupPage() {
 
         <div className="field">
           <div className="label">Password</div>
+
           <div className="inputWrap">
             <Lock size={18} className="inputIcon" />
+
             <input
               className="input"
               type={showPassword ? "text" : "password"}
-              placeholder="Create a password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              autoComplete="new-password"
               required
             />
+
             <button
               type="button"
               className="inputAction"
-              onClick={() => setShowPassword((s) => !s)}
-              aria-label={showPassword ? "Hide password" : "Show password"}
-              title={showPassword ? "Hide password" : "Show password"}
+              onClick={() => setShowPassword(!showPassword)}
             >
               {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
             </button>
           </div>
         </div>
 
-        <button className="primaryBtn" type="submit" disabled={loading}>
+        <button className="primaryBtn" disabled={loading}>
           {loading ? "Creating..." : "Create account"}
         </button>
 

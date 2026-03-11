@@ -6,6 +6,12 @@ export interface IBreak {
   duration?: number;
 }
 
+export interface INetwork {
+  ip?: string;
+  ssid?: string;
+  ua?: string;
+}
+
 export interface IAttendance extends Document {
   employeeId: string;
   date: Date;
@@ -14,6 +20,9 @@ export interface IAttendance extends Document {
   breaks: IBreak[];
   status: "present" | "absent" | "half-day" | "on-break";
   totalHours?: number;
+  totalBreakTime?: number;
+  totalWorkHours?: number;
+  network?: INetwork;
   checkInIP?: string;
   checkOutIP?: string;
 }
@@ -50,6 +59,17 @@ const attendanceSchema = new Schema<IAttendance>(
     totalHours: {
       type: Number,
     },
+    totalBreakTime: {
+      type: Number,
+    },
+    totalWorkHours: {
+      type: Number,
+    },
+    network: {
+      ip: { type: String },
+      ssid: { type: String },
+      ua: { type: String },
+    },
     checkInIP: {
       type: String,
     },
@@ -57,13 +77,15 @@ const attendanceSchema = new Schema<IAttendance>(
       type: String,
     },
   },
-
   {
     timestamps: true,
-  }
+  },
 );
 
 attendanceSchema.index({ employeeId: 1, date: 1 }, { unique: true });
 
-export default mongoose.models.Attendance ||
+const Attendance =
+  (mongoose.models.Attendance as mongoose.Model<IAttendance>) ||
   mongoose.model<IAttendance>("Attendance", attendanceSchema);
+
+export default Attendance;

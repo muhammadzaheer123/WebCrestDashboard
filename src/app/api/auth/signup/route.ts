@@ -3,53 +3,32 @@ import type { NextRequest } from "next/server";
 import jwt from "jsonwebtoken";
 import { z, ZodError } from "zod";
 import { connectDB } from "@/lib/db";
-// import { ensureOfficeGate } from "@/lib/ip";
-import User from "@/models/user.model";
+import Employee from "@/models/Employee";
 
 export const runtime = "nodejs";
 
-export const RoleEnum = z.enum(["admin", "hr"]);
-export type Role = z.infer<typeof RoleEnum>;
+const RoleEnum = z.enum(["admin", "hr"]);
 
-export const SignupSchema = z.object({
+const SignupSchema = z.object({
   name: z.string().min(2, "Name is required"),
   email: z.string().email("Invalid email"),
   password: z.string().min(6, "Password must be at least 6 characters"),
   role: RoleEnum,
-  invite: z.string().optional(),
 });
 
-const MAX_AGE = 60 * 60 * 8; // 8 hours
+const MAX_AGE = 60 * 60 * 8;
 
 export async function POST(req: NextRequest) {
   try {
-    // const gate = ensureOfficeGate(req.headers);
-    // if (!gate.ok) {
-    //   return NextResponse.json(
-    //     {
-    //       message: "Access restricted",
-    //       details: "Signup is only available from the office network",
-    //       ip: gate.ip,
-    //       reason: gate.reason,
-    //     },
-    //     { status: 403 }
-    //   );
-    // }
-
-    // Validate body
     const body = await req.json();
-    const parsed = SignupSchema.parse(body);
+    const { name, email, password, role } = SignupSchema.parse(body);
 
-    const name = parsed.name.trim();
-    const email = parsed.email.toLowerCase().trim();
-    const password = parsed.password;
-    const role = parsed.role; // already "admin" | "hr" from z.enum
-    const invite = parsed.invite;
+    const normalizedEmail = email.toLowerCase().trim();
 
     await connectDB();
 
-    // Duplicate check
-    const existing = await User.findOne({ email });
+    const existing = await Employee.findOne({ email: normalizedEmail });
+
     if (existing) {
       return NextResponse.json(
         { message: "User already exists" },
@@ -57,10 +36,22 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Create user (pre('save') will hash password)
-    const user = await User.create({ name, email, password, role });
+    const user = await Employee.create({
+      employeeId: `ADM${Date.now()}`,
+      name: name.trim(),
+      email: normalizedEmail,
+      password,
+      role,
+      phone: "0000000000",
+      department: "Administration",
+      designation: role === "admin" ? "Administrator" : "HR Manager",
+      shift: "Morning",
+      qrCode: `QR_ADMIN_${Date.now()}`,
+      isActive: true,
+    });
 
     const JWT_SECRET = process.env.JWT_SECRET;
+
     if (!JWT_SECRET) {
       return NextResponse.json(
         { message: "Server configuration error" },
@@ -69,22 +60,31 @@ export async function POST(req: NextRequest) {
     }
 
     const userId = String(user._id ?? user.id);
+
     const token = jwt.sign(
-      { sub: userId, email: user.email ?? "", name: user.name ?? "", role },
+      {
+        sub: userId,
+        email: user.email ?? "",
+        name: user.name ?? "",
+        role: user.role,
+      },
       JWT_SECRET,
-      { expiresIn: MAX_AGE },
+      {
+        expiresIn: MAX_AGE,
+        algorithm: "HS256",
+      },
     );
 
     const res = NextResponse.json(
       {
         ok: true,
+        message: "Registration successful",
         user: {
           id: userId,
-          name: user.name ?? "",
-          email: user.email ?? "",
-          role,
+          name: user.name,
+          email: user.email,
+          role: user.role,
         },
-        message: "Registration successful",
       },
       { status: 201 },
     );
@@ -119,7 +119,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    console.error("❌ Signup error:", err);
+    console.error("Signup error:", err);
+
     return NextResponse.json({ message: "Server error" }, { status: 500 });
   }
 }

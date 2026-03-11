@@ -6,13 +6,13 @@ const POLICY_KEY = "default";
 
 export async function PATCH(
   req: Request,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   await connectDB();
   const patch = await req.json();
-
+  const { id } = await params;
   const updated = await Policy.findOneAndUpdate(
-    { key: POLICY_KEY, "shifts.id": params.id },
+    { key: POLICY_KEY, "shifts.id": params },
     {
       $set: {
         "shifts.$.name": patch.name,
@@ -29,13 +29,13 @@ export async function PATCH(
 
 export async function DELETE(
   _req: Request,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   await connectDB();
-
+  const { id } = await params;
   const updated = await Policy.findOneAndUpdate(
     { key: POLICY_KEY },
-    { $pull: { shifts: { id: params.id } } },
+    { $pull: { shifts: { id: id } } },
     { new: true },
   ).lean();
 

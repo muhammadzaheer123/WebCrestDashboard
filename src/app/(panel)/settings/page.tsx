@@ -246,6 +246,7 @@ export default function SettingsPage() {
   }, []);
 
   const dirty = useMemo(() => {
+    if (typeof window === "undefined") return false;
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return true;
     return raw !== JSON.stringify(state);

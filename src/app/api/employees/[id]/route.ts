@@ -4,19 +4,19 @@ import Employee from "@/models/Employee";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     await connectDB();
 
-    const { id } = params;
+    const { id } = await params;
 
     const employee = await Employee.findById(id).select("-password -__v");
 
     if (!employee) {
       return NextResponse.json(
         { error: "Employee not found" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -28,19 +28,19 @@ export async function GET(
     console.error("Error fetching employee:", error);
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     await connectDB();
 
-    const { id } = params;
+    const { id } = await params;
     const body = await request.json();
 
     const employee = await Employee.findByIdAndUpdate(id, body, {
@@ -51,7 +51,7 @@ export async function PUT(
     if (!employee) {
       return NextResponse.json(
         { error: "Employee not found" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -63,28 +63,27 @@ export async function PUT(
     console.error("Error updating employee:", error);
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     await connectDB();
 
-    const { id } = params;
+    const { id } = await params;
 
-    const employee = await Employee.findByIdAndDelete(id).select(
-      "-password -__v"
-    );
+    const employee =
+      await Employee.findByIdAndDelete(id).select("-password -__v");
 
     if (!employee) {
       return NextResponse.json(
         { error: "Employee not found" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -96,7 +95,7 @@ export async function DELETE(
     console.error("Error deleting employee:", error);
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

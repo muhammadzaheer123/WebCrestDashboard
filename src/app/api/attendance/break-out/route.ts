@@ -1,80 +1,60 @@
-import { NextRequest, NextResponse } from "next/server";
-import { connectDB } from "../../../../lib/db";
-import Attendance from "../../../../models/attendance.model";
+import { NextResponse } from "next/server";
+import { connectDB } from "@/lib/db";
+import Attendance from "@/models/attendance.model";
+import { getUserFromToken } from "@/lib/middlewares/auth";
 
-export async function POST(request: NextRequest) {
+export async function POST() {
   try {
     await connectDB();
 
-    const { employeeId } = await request.json();
+    const user = await getUserFromToken();
 
-    if (!employeeId) {
-      return NextResponse.json(
-        { success: false, error: "Employee ID is required" },
-        { status: 400 }
-      );
+    if (!user) {
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    let attendance = await Attendance.findOne({
-      employeeId: employeeId,
+    const attendance = await Attendance.findOne({
+      employeeId: user.id,
       date: {
         $gte: today,
-        $lt: new Date(today.getTime() + 24 * 60 * 60 * 1000),
+        $lt: new Date(today.getTime() + 86400000),
       },
     });
 
     if (!attendance) {
       return NextResponse.json(
-        { success: false, error: "No attendance record found for today" },
-        { status: 400 }
+        { error: "No attendance found" },
+        { status: 400 },
       );
     }
-
-    const activeBreakIndex = attendance.breaks.findIndex(
-      (breakRecord: any) => !breakRecord.breakOut
-    );
-
-    if (activeBreakIndex === -1) {
+    if (!attendance.checkIn || attendance.checkOut) {
       return NextResponse.json(
-        { success: false, error: "No active break found to end" },
-        { status: 400 }
+        { error: "You must check in first" },
+        { status: 400 },
       );
     }
+    const activeBreak = attendance.breaks.find((b: any) => !b.breakOut);
 
-    const breakOutTime = new Date();
-    const breakInTime = attendance.breaks[activeBreakIndex].breakIn;
-    const breakDuration = Math.round(
-      (breakOutTime.getTime() - breakInTime.getTime()) / (1000 * 60)
-    ); // in minutes
+    if (!activeBreak) {
+      return NextResponse.json({ error: "No active break" }, { status: 400 });
+    }
 
-    attendance.breaks[activeBreakIndex].breakOut = breakOutTime;
-    attendance.breaks[activeBreakIndex].duration = breakDuration;
+    activeBreak.breakOut = new Date();
 
-    attendance.status = "present";
+    activeBreak.duration = Math.round(
+      (activeBreak.breakOut.getTime() - activeBreak.breakIn.getTime()) / 60000,
+    );
 
     await attendance.save();
 
     return NextResponse.json({
       success: true,
-      message: "Break ended successfully",
-      data: {
-        breakOutTime,
-        breakDuration: `${breakDuration} minutes`,
-        employeeId,
-      },
+      message: "Break ended",
     });
-  } catch (error: any) {
-    console.error("Error ending break:", error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Failed to end break",
-        details: error.message,
-      },
-      { status: 500 }
-    );
+  } catch (err) {
+    return NextResponse.json({ error: "Failed to end break" }, { status: 500 });
   }
 }

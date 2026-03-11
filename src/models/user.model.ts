@@ -5,47 +5,24 @@ export interface IUser extends Document {
   name: string;
   email: string;
   password: string;
-  role: "admin" | "hr" | "user";
+  role: "admin" | "hr" | "employee";
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
 }
 
-export interface IUserModel extends Model<IUser> {}
+interface IUserModel extends Model<IUser> {}
 
-const UserSchema = new Schema<IUser, IUserModel>(
+const UserSchema = new Schema<IUser>(
   {
-    name: {
+    name: { type: String, required: true },
+    email: { type: String, required: true, unique: true, lowercase: true },
+    password: { type: String, required: true, select: false },
+    role: {
       type: String,
-      required: [true, "Name is required"],
-      trim: true,
-      minlength: [2, "Name must be at least 2 characters"],
-      maxlength: [50, "Name must be less than 50 characters"],
-      validate: {
-        validator: (name: string) => /^[a-zA-Z\s]+$/.test(name),
-        message: "Name can only contain letters and spaces",
-      },
+      enum: ["admin", "hr", "employee"],
+      default: "employee",
     },
-    email: {
-      type: String,
-      required: [true, "Email is required"],
-      unique: true,
-      lowercase: true,
-      trim: true,
-      index: true,
-      validate: {
-        validator: (email: string) =>
-          /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,})+$/.test(email),
-        message: "Invalid email address",
-      },
-    },
-    password: {
-      type: String,
-      required: [true, "Password is required"],
-      minlength: [6, "Password must be at least 6 characters"],
-      select: false,
-    },
-    role: { type: String, enum: ["admin", "hr", "user"], default: "user" },
   },
   { timestamps: true },
 );
@@ -60,5 +37,8 @@ UserSchema.methods.comparePassword = function (candidate: string) {
   return bcrypt.compare(candidate, this.password);
 };
 
-export default mongoose.models.User ||
+const User =
+  (mongoose.models?.User as Model<IUser>) ||
   mongoose.model<IUser>("User", UserSchema);
+
+export default User;

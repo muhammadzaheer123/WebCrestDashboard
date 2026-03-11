@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useEffect, useRef } from "react";
 import type { LucideIcon } from "lucide-react";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
-import { useRouter } from "next/router";
 import Image from "next/image";
 
 export type NavItem = {

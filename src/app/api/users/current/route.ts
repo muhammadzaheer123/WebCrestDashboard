@@ -1,4 +1,4 @@
-import User from "@/models/user.model";
+import Employee from "@/models/Employee";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(req: NextRequest) {
@@ -7,7 +7,7 @@ export async function GET(req: NextRequest) {
     if (!userId)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const user = await User.findById(userId).select("-password");
+    const user = await Employee.findById(userId).select("-password");
     if (!user)
       return NextResponse.json({ error: "User not found" }, { status: 404 });
 

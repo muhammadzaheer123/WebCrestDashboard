@@ -8,15 +8,17 @@ import { EmptyState, GlassCard, Input, cryptoId } from "./ui";
 
 export default function HolidaysSection({ query }: { query: string }) {
   const { state, setState } = usePolicy();
-  if (!state) return null;
 
   const filteredHolidays = useMemo(() => {
+    if (!state) return [];
     const q = query.trim().toLowerCase();
     if (!q) return state.holidays;
     return state.holidays.filter(
       (x) => x.title.toLowerCase().includes(q) || x.date.includes(q),
     );
-  }, [state.holidays, query]);
+  }, [state, query]);
+
+  if (!state) return null;
 
   return (
     <GlassCard
@@ -32,7 +34,7 @@ export default function HolidaysSection({ query }: { query: string }) {
       }
     >
       <div className="space-y-3">
-        {filteredHolidays.length === 0 ? (
+        {filteredHolidays?.length === 0 ? (
           <EmptyState
             title="No holidays found"
             subtitle="Add a holiday to get started."

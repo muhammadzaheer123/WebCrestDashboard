@@ -1,78 +1,73 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
-import Attendance from "../../../../models/attendance.model";
+import Attendance from "@/models/attendance.model";
+import { getUserFromToken } from "@/lib/middlewares/auth";
 
-export async function POST(request: NextRequest) {
+const AttendanceModel = Attendance;
+
+export async function POST() {
   try {
     await connectDB();
 
-    const { employeeId } = await request.json();
+    const user = await getUserFromToken();
 
-    // Validate input
-    if (!employeeId) {
+    if (!user) {
       return NextResponse.json(
-        { success: false, error: "Employee ID is required" },
-        { status: 400 }
+        { success: false, error: "Not authenticated" },
+        { status: 401 },
       );
     }
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    let attendance = await Attendance.findOne({
-      employeeId: employeeId,
+    const attendance = await AttendanceModel.findOne({
+      employeeId: user.id,
       date: {
         $gte: today,
-        $lt: new Date(today.getTime() + 24 * 60 * 60 * 1000),
+        $lt: new Date(today.getTime() + 86400000),
       },
     });
 
     if (!attendance) {
       return NextResponse.json(
-        {
-          success: false,
-          error: "Please check in first before taking a break",
-        },
-        { status: 400 }
+        { error: "No attendance record found" },
+        { status: 400 },
       );
     }
 
-    const activeBreak = attendance.breaks.find(
-      (breakRecord: any) => !breakRecord.breakOut
-    );
+    if (!attendance.checkIn || attendance.checkOut) {
+      return NextResponse.json(
+        { error: "You must check in first" },
+        { status: 400 },
+      );
+    }
+
+    if (!attendance.breaks) attendance.breaks = [];
+
+    const activeBreak = attendance.breaks.find((b: any) => !b.breakOut);
 
     if (activeBreak) {
       return NextResponse.json(
-        { success: false, error: "You are already on a break" },
-        { status: 400 }
+        { error: "Break already active" },
+        { status: 400 },
       );
     }
 
     attendance.breaks.push({
       breakIn: new Date(),
-      breakOut: null,
-      duration: 0,
     });
 
     await attendance.save();
 
     return NextResponse.json({
       success: true,
-      message: "Break started successfully",
-      data: {
-        breakInTime: new Date(),
-        employeeId,
-      },
+      message: "Break started",
     });
-  } catch (error: any) {
-    console.error("Error starting break:", error);
+  } catch {
     return NextResponse.json(
-      {
-        success: false,
-        error: "Failed to start break",
-        details: error.message,
-      },
-      { status: 500 }
+      { error: "Failed to start break" },
+      { status: 500 },
     );
   }
 }

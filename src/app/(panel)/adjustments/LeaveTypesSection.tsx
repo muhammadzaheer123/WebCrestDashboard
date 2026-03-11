@@ -16,13 +16,14 @@ import {
 
 export default function LeaveTypesSection({ query }: { query: string }) {
   const { state, setState } = usePolicy();
-  if (!state) return null;
 
   const filteredLeaveTypes = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return state.leaveTypes;
     return state.leaveTypes.filter((x) => x.name.toLowerCase().includes(q));
   }, [state.leaveTypes, query]);
+
+  if (!state) return null;
 
   return (
     <GlassCard

@@ -8,13 +8,14 @@ import { EmptyState, Field, GlassCard, Input, clampInt, cryptoId } from "./ui";
 
 export default function ShiftsSection({ query }: { query: string }) {
   const { state, setState } = usePolicy();
-  if (!state) return null;
 
   const filteredShifts = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return state.shifts;
     return state.shifts.filter((x) => x.name.toLowerCase().includes(q));
   }, [state.shifts, query]);
+
+  if (!state) return null;
 
   return (
     <GlassCard

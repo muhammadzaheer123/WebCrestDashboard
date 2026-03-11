@@ -228,3 +228,20 @@
     font-size: 26px;
   }
 }
+.otpInput {
+  width: 80px;
+  height: 60px;
+  border-radius: 14px;
+  border: 1px solid rgba(187, 55, 164, 0.28);
+  background: rgba(10, 6, 22, 0.55);
+  color: #fff;
+  text-align: center;
+  font-size: 24px;
+  outline: none;
+  gap: 8px;
+}
+
+.otpInput:focus {
+  border-color: rgba(187, 55, 164, 0.65);
+  box-shadow: 0 0 0 4px rgba(187, 55, 164, 0.15);
+}

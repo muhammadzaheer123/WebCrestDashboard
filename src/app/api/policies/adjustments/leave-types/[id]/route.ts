@@ -6,14 +6,14 @@ const POLICY_KEY = "default";
 
 export async function PATCH(
   req: Request,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   await connectDB();
   const patch = await req.json();
-
+  const { id } = await params;
   // Update the matched array item using positional operator
   const updated = await Policy.findOneAndUpdate(
-    { key: POLICY_KEY, "leaveTypes.id": params.id },
+    { key: POLICY_KEY, "leaveTypes.id": id },
     {
       $set: {
         "leaveTypes.$.name": patch.name,
@@ -30,13 +30,14 @@ export async function PATCH(
 
 export async function DELETE(
   _req: Request,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   await connectDB();
+  const { id } = await params;
 
   const updated = await Policy.findOneAndUpdate(
     { key: POLICY_KEY },
-    { $pull: { leaveTypes: { id: params.id } } },
+    { $pull: { leaveTypes: { id:id } } },
     { new: true },
   ).lean();
 

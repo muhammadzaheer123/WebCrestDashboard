@@ -46,7 +46,7 @@ export default function EmployeeModal({
   canWrite: boolean;
 }) {
   const isEdit = !!editing?._id;
-
+  const [password, setPassword] = useState("");
   const [name, setName] = useState(editing?.name || "");
   const [email, setEmail] = useState(editing?.email || "");
   const [phone, setPhone] = useState(editing?.phone || "");
@@ -105,6 +105,7 @@ export default function EmployeeModal({
         designation,
         role,
         shift,
+        password,
       };
 
       if (isEdit) {
@@ -178,6 +179,13 @@ export default function EmployeeModal({
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                />
+              </Field>
+              <Field label="Password *">
+                <Input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                 />
               </Field>
               <Field label="Phone *">

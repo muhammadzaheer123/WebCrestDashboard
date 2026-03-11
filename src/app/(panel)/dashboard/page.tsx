@@ -1,3 +1,4 @@
+import { requireRole } from "@/lib/server/roleGuard";
 import {
   Boxes,
   Hourglass,
@@ -43,7 +44,8 @@ const stats: Array<{
 
 const tabs = ["Pending", "Approved", "Rejected", "All"] as const;
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  await requireRole(["admin", "hr"]);
   return (
     <div className="min-h-screen text-zinc-100">
       {/* Ambient background glow */}

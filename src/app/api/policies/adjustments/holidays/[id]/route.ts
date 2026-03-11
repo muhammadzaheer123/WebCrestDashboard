@@ -6,13 +6,13 @@ const POLICY_KEY = "default";
 
 export async function DELETE(
   _req: Request,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   await connectDB();
-
+  const { id } = await params;
   const updated = await Policy.findOneAndUpdate(
     { key: POLICY_KEY },
-    { $pull: { holidays: { id: params.id } } },
+    { $pull: { holidays: { id: id } } },
     { new: true },
   ).lean();
 

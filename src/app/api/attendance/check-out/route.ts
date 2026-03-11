@@ -1,20 +1,30 @@
-// app/api/attendance/check-out/route.ts
 import { NextResponse } from "next/server";
 import { ymd } from "@/lib/dates";
 import Attendance from "@/models/attendance.model";
+import type { IBreak } from "@/models/attendance.model";
 import { connectDB } from "@/lib/db";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
 import { ensureOfficeGate } from "@/lib/ip";
+import { cookies } from "next/headers";
 
 export const runtime = "nodejs";
 
-function getEmployeeId(req: Request): string | null {
-  const auth = req.headers.get("authorization") || "";
-  if (!auth.startsWith("Bearer ")) return null;
-  const token = auth.slice(7);
+interface JWTPayload {
+  sub?: string;
+  userId?: string;
+  id?: string;
+  _id?: string;
+}
+
+async function getEmployeeId(): Promise<string | null> {
+  const cookieStore = await cookies();
+  const token = cookieStore.get("token")?.value;
+
+  if (!token) return null;
+
   try {
-    const decoded: any = jwt.verify(token, process.env.JWT_SECRET!);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as JWTPayload;
     return (
       decoded?.sub ?? decoded?.userId ?? decoded?.id ?? decoded?._id ?? null
     );
@@ -34,20 +44,21 @@ export async function POST(req: Request) {
           reason: gate.reason,
           ip: gate.ip ?? undefined,
         },
-        { status: 403 }
+        { status: 403 },
       );
     }
 
-    const empId = getEmployeeId(req);
+    const empId = await getEmployeeId();
     if (!empId)
       return NextResponse.json(
         { success: false, message: "Unauthenticated" },
-        { status: 401 }
+        { status: 401 },
       );
+
     if (!mongoose.Types.ObjectId.isValid(empId)) {
       return NextResponse.json(
         { success: false, message: "Invalid employee id in token" },
-        { status: 400 }
+        { status: 400 },
       );
     }
     const employeeObjectId = new mongoose.Types.ObjectId(empId);
@@ -64,6 +75,7 @@ export async function POST(req: Request) {
     })
       .sort({ checkIn: -1 })
       .lean(false);
+
     if (!open) {
       return NextResponse.json(
         {
@@ -72,55 +84,71 @@ export async function POST(req: Request) {
           date: today,
           employeeId: empId,
         },
-        { status: 409 }
+        { status: 409 },
       );
     }
 
-    // Optional policy: allow cross-midnight checkout.
-    // If you want to enforce "same-day only", uncomment next block:
-    // if (open.date !== today) {
-    //   return NextResponse.json(
-    //     {
-    //       success: false,
-    //       message: `Open check-in belongs to ${open.date}; same-day checkout only`,
-    //       date: today,
-    //       employeeId: empId,
-    //     },
-    //     { status: 409 }
-    //   );
-    // }
-
+    // set checkout time
     open.checkOut = now;
+
+    // calculate total break time
+    let totalBreak = 0;
+
+    if (open.breaks && open.breaks.length > 0) {
+      open.breaks.forEach((b: IBreak) => {
+        if (b.breakIn && b.breakOut) {
+          totalBreak +=
+            new Date(b.breakOut).getTime() - new Date(b.breakIn).getTime();
+        }
+      });
+    }
+
+    // total work duration
+    const totalDuration =
+      new Date(now).getTime() - new Date(open.checkIn).getTime() - totalBreak;
+
+    // convert to hours
+    const totalWorkHours = totalDuration / (1000 * 60 * 60);
+
+    // save calculations
+    open.totalBreakTime = totalBreak;
+    open.totalWorkHours = Number(totalWorkHours.toFixed(2));
+
+    // save network info
     open.network = {
       ip: gate.ip,
       ssid: gate.ssid,
       ua: req.headers.get("user-agent") || "",
     };
+
     await open.save();
 
     return NextResponse.json(
       {
         success: true,
         message: "Checked-out",
-        date: open.date ?? today, // keep the record's date
+        date: open.date ?? today,
         recordId: open._id,
         employeeId: empId,
+        totalWorkHours: open.totalWorkHours,
+        totalBreakTime: open.totalBreakTime,
       },
-      { status: 200 }
+      { status: 200 },
     );
-  } catch (e: any) {
+  } catch (e: unknown) {
+    const err = e as Error;
     if (process.env.NODE_ENV !== "production") {
-      console.error("check-out error:", e?.stack || e?.message || e);
+      console.error("check-out error:", err?.stack || err?.message || e);
     }
     return NextResponse.json(
       {
         success: false,
         message: "Server error (check-out)",
         ...(process.env.NODE_ENV !== "production" && {
-          error: e?.message ?? String(e),
+          error: err?.message ?? String(e),
         }),
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
