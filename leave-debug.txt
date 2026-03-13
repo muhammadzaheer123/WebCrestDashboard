@@ -1,0 +1,52 @@
+===== PANEL LAYOUT =====
+import AdminShell from "./ui/AdminShell";
+
+export default function PanelLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return <AdminShell>{children}</AdminShell>;
+}
+===== SIDEBAR / NAV FILES =====
+src/app/(panel)/ui/AdminShell.tsx
+===== LEAVES PAGE =====
+import { requireRole } from "@/lib/server/roleGuard";
+import React from "react";
+
+export default async function page() {
+  const authUser = await requireRole(["admin", "hr"]);
+  return <div>page</div>;
+}
+===== LEAVES HR PAGE =====
+import { requireRole } from "@/lib/server/roleGuard";
+
+export default async function LeaveManagementPage() {
+  await requireRole(["admin", "hr"]);
+
+  return (
+    <div className="space-y-6">
+      <h1 className="text-3xl font-semibold">Employee Leaves</h1>
+
+      <div className="bg-[#120a24] rounded-xl p-6 border border-purple-800">
+        All employee leave requests will appear here.
+      </div>
+    </div>
+  );
+}
+===== MY LEAVES PAGE =====
+import { requireRole } from "@/lib/server/roleGuard";
+
+export default async function MyLeavesPage() {
+  await requireRole(["employee"]);
+
+  return (
+    <div className="space-y-6">
+      <h1 className="text-3xl font-semibold">My Leaves</h1>
+
+      <button className="bg-purple-600 px-4 py-2 rounded-lg">
+        Submit Leave
+      </button>
+    </div>
+  );
+}

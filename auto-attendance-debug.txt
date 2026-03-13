@@ -1,0 +1,575 @@
+===== ATTENDANCE CHECK-IN API =====
+// app/api/attendance/check-in/route.ts
+
+import { NextResponse } from "next/server";
+import { ymd } from "@/lib/dates";
+import Attendance from "@/models/attendance.model";
+import { connectDB } from "@/lib/db";
+import jwt from "jsonwebtoken";
+import mongoose from "mongoose";
+import { ensureOfficeGate } from "@/lib/ip";
+import { cookies } from "next/headers";
+
+export const runtime = "nodejs";
+
+async function getEmployeeId(): Promise<string | null> {
+  const cookieStore = await cookies();
+  const token = cookieStore.get("token")?.value;
+
+  if (!token) return null;
+
+  try {
+    const decoded: any = jwt.verify(token, process.env.JWT_SECRET!);
+
+    return (
+      decoded?.sub ?? decoded?.userId ?? decoded?.id ?? decoded?._id ?? null
+    );
+  } catch {
+    return null;
+  }
+}
+
+export async function POST(req: Request) {
+  try {
+    const gate = ensureOfficeGate(req.headers);
+    if (!gate.ok) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Not on office network",
+          reason: gate.reason,
+          ip: gate.ip ?? undefined,
+        },
+        { status: 403 },
+      );
+    }
+
+    // ✅ FIX
+    const empId = await getEmployeeId();
+
+    if (!empId) {
+      return NextResponse.json(
+        { success: false, message: "Unauthenticated" },
+        { status: 401 },
+      );
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(empId)) {
+      return NextResponse.json(
+        { success: false, message: "Invalid employee id in token" },
+        { status: 400 },
+      );
+    }
+
+    const employeeObjectId = new mongoose.Types.ObjectId(empId);
+
+    await connectDB();
+
+    const today = ymd();
+    const now = new Date();
+
+    const doc = await Attendance.findOne({
+      employeeId: employeeObjectId,
+      date: today,
+    });
+
+    if (doc?.checkIn && !doc.checkOut) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Already checked-in",
+          date: today,
+          employeeId: empId,
+        },
+        { status: 409 },
+      );
+    }
+
+    const networkMeta = {
+      ip: gate.ip,
+      ssid: gate.ssid,
+      ua: req.headers.get("user-agent") || "",
+    };
+
+    if (!doc) {
+      const created = await Attendance.create({
+        employeeId: employeeObjectId,
+        date: today,
+        checkIn: now,
+        source: "button",
+        network: networkMeta,
+      });
+
+      return NextResponse.json(
+        {
+          success: true,
+          message: "Checked-in",
+          date: today,
+          recordId: created._id,
+          employeeId: empId,
+        },
+        { status: 200 },
+      );
+    }
+
+    doc.checkIn = now;
+    doc.checkOut = undefined;
+    // doc.network = networkMeta;
+
+    await doc.save();
+
+    return NextResponse.json(
+      {
+        success: true,
+        message: "Checked-in",
+        date: today,
+        recordId: doc._id,
+        employeeId: empId,
+      },
+      { status: 200 },
+    );
+  } catch (e: any) {
+    console.error("check-in error:", e);
+
+    return NextResponse.json(
+      { success: false, message: "Server error (check-in)" },
+      { status: 500 },
+    );
+  }
+}
+
+===== ATTENDANCE MAIN API =====
+import { NextRequest, NextResponse } from "next/server";
+import { connectDB } from "../../../lib/db";
+import Attendance from "../../../models/attendance.model";
+import mongoose from "mongoose";
+
+export async function GET(request: NextRequest) {
+  try {
+    await connectDB();
+
+    const { searchParams } = new URL(request.url);
+
+    const employeeId = searchParams.get("employeeId");
+    const startDate = searchParams.get("startDate");
+    const endDate = searchParams.get("endDate");
+    const status = searchParams.get("status");
+    const page = parseInt(searchParams.get("page") || "1");
+    const limit = parseInt(searchParams.get("limit") || "50");
+
+    const filter: any = {};
+
+    if (employeeId && mongoose.Types.ObjectId.isValid(employeeId)) {
+      filter.employeeId = new mongoose.Types.ObjectId(employeeId);
+    }
+
+    if (status) filter.status = status;
+
+    if (startDate || endDate) {
+      filter.date = {};
+      if (startDate) filter.date.$gte = new Date(startDate);
+      if (endDate) filter.date.$lte = new Date(endDate);
+    }
+
+    const skip = (page - 1) * limit;
+
+    const records = await Attendance.find(filter)
+      .sort({ date: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    const total = await Attendance.countDocuments(filter);
+
+    const recordsWithStats = records.map((record: any) => {
+      const breaks = record.breaks || [];
+
+      let totalHours = 0;
+      if (record.checkIn && record.checkOut) {
+        totalHours =
+          (record.checkOut.getTime() - record.checkIn.getTime()) /
+          (1000 * 60 * 60);
+      }
+
+      const totalBreakDuration = breaks.reduce(
+        (t: number, b: any) => t + (b.duration || 0),
+        0,
+      );
+
+      const overtime = totalHours > 8 ? totalHours - 8 : 0;
+
+      return {
+        ...record.toObject(),
+        totalHours: Number(totalHours.toFixed(2)),
+        totalBreakDuration,
+        overtime: Number(overtime.toFixed(2)),
+        netWorkingHours: Number(
+          (totalHours - totalBreakDuration / 60).toFixed(2),
+        ),
+      };
+    });
+
+    return NextResponse.json({
+      success: true,
+      data: recordsWithStats,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    });
+  } catch (error: any) {
+    console.error("Error fetching attendance records:", error);
+
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Failed to fetch attendance records",
+      },
+      { status: 500 },
+    );
+  }
+}
+
+===== ATTENDANCE TODAY API =====
+import { NextRequest, NextResponse } from "next/server";
+import { connectDB } from "@/lib/db";
+import Attendance from "@/models/attendance.model";
+import jwt from "jsonwebtoken";
+import { cookies } from "next/headers";
+import mongoose from "mongoose";
+import { ymd } from "@/lib/dates";
+
+export async function GET(request: NextRequest) {
+  try {
+    await connectDB();
+
+    const cookieStore = await cookies();
+    const token = cookieStore.get("token")?.value;
+
+    if (!token) {
+      return NextResponse.json(
+        { success: false, error: "Unauthorized" },
+        { status: 401 },
+      );
+    }
+
+    const decoded: any = jwt.verify(token, process.env.JWT_SECRET!);
+
+    const employeeId =
+      decoded?.sub ?? decoded?.userId ?? decoded?.id ?? decoded?._id;
+
+    if (!employeeId) {
+      return NextResponse.json(
+        { success: false, error: "Employee ID missing in token" },
+        { status: 400 },
+      );
+    }
+
+    const employeeObjectId = new mongoose.Types.ObjectId(employeeId);
+
+    const today = ymd(); // "2026-03-05"
+
+    const attendance = await Attendance.findOne({
+      employeeId: employeeObjectId,
+      date: today,
+    });
+
+    if (!attendance) {
+      return NextResponse.json({
+        success: true,
+        data: null,
+      });
+    }
+
+    const breaks = attendance.breaks || [];
+
+    // calculate break duration
+    let totalBreakDuration = 0;
+
+    breaks.forEach((b: any) => {
+      if (b.breakIn && b.breakOut) {
+        totalBreakDuration +=
+          new Date(b.breakOut).getTime() - new Date(b.breakIn).getTime();
+      }
+    });
+
+    // convert break ms to hours
+    const breakHours = totalBreakDuration / (1000 * 60 * 60);
+
+    // calculate work hours
+    let totalHours = 0;
+
+    if (attendance.checkIn && attendance.checkOut) {
+      const workMs =
+        attendance.checkOut.getTime() -
+        attendance.checkIn.getTime() -
+        totalBreakDuration;
+
+      totalHours = workMs / (1000 * 60 * 60);
+      totalHours = Math.round(totalHours * 100) / 100;
+    }
+
+    const overtime = totalHours > 8 ? totalHours - 8 : 0;
+
+    // determine status
+    let currentStatus = "Checked Out";
+
+    if (attendance.checkIn && !attendance.checkOut) {
+      currentStatus = "Checked In";
+
+      const activeBreak = breaks.find((b: any) => !b.breakOut);
+      if (activeBreak) currentStatus = "On Break";
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        _id: attendance._id,
+        checkIn: attendance.checkIn,
+        checkOut: attendance.checkOut,
+        status: currentStatus,
+        breaks,
+        totalHours,
+        breakDuration: breakHours,
+        overtime,
+        netWorkingHours: totalHours,
+      },
+    });
+  } catch (error: any) {
+    console.error("Error fetching today's attendance:", error);
+
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Failed to fetch today's attendance",
+      },
+      { status: 500 },
+    );
+  }
+}
+
+===== ATTENDANCE PAGE =====
+import { requireRole } from "@/lib/server/roleGuard";
+import AttendanceClient from "./AttendanceClient";
+
+export default async function AttendancePage() {
+  await requireRole(["admin", "hr", "employee"]);
+
+  return <AttendanceClient />;
+}
+
+===== ATTENDANCE MODEL SEARCH =====
+src/models/attendance.model.ts:88:  (mongoose.models.Attendance as mongoose.Model<IAttendance>) ||
+src/models/attendance.model.ts:91:export default Attendance;
+src/app/(panel)/adjustments/AttendanceSection.tsx:7:export default function AttendanceSection() {
+src/app/(panel)/attendance/AttendanceActions.tsx:4:export default function AttendanceActions({
+src/app/(panel)/attendance/AttendanceClient.tsx:9:export default function AttendanceClient() {
+src/app/(panel)/attendance/AttendanceClock.tsx:7:export default function AttendanceClock({ refreshData }: any) {
+src/app/(panel)/attendance/AttendanceHistory.tsx:24:export default function AttendanceHistory({ attendance }: any) {
+src/app/(panel)/attendance/AttendanceLog.tsx:3:export default function AttendanceLog({ data }: any) {
+src/app/(panel)/attendance/AttendanceMonthly.tsx:5:export default function AttendanceMonthly({ records }: any) {
+src/app/(panel)/attendance/AttendanceStatus.tsx:4:export default function AttendanceStatus({ data }: any) {
+src/app/(panel)/attendance/page.tsx:4:export default async function AttendancePage() {
+src/app/api/attendance/break-in/route.ts:3:import Attendance from "@/models/attendance.model";
+src/app/api/attendance/break-out/route.ts:3:import Attendance from "@/models/attendance.model";
+src/app/api/attendance/check-in/route.ts:5:import Attendance from "@/models/attendance.model";
+src/app/api/attendance/check-out/route.ts:3:import Attendance from "@/models/attendance.model";
+src/app/api/attendance/check-out/route.ts:4:import type { IBreak } from "@/models/attendance.model";
+src/app/api/attendance/history/route.ts:3:import Attendance from "@/models/attendance.model";
+src/app/api/attendance/manual/route.ts:3:import Attendance from "../../../../models/attendance.model";
+src/app/api/attendance/route.ts:3:import Attendance from "../../../models/attendance.model";
+src/app/api/attendance/today/route.ts:3:import Attendance from "@/models/attendance.model";
+src/models/attendance.model.ts:88:  (mongoose.models.Attendance as mongoose.Model<IAttendance>) ||
+src/models/attendance.model.ts:91:export default Attendance;
+
+===== ATTENDANCE MODEL FILES =====
+import mongoose, { Schema, Document } from "mongoose";
+
+export interface IBreak {
+  breakIn: Date;
+  breakOut?: Date;
+  duration?: number;
+}
+
+export interface INetwork {
+  ip?: string;
+  ssid?: string;
+  ua?: string;
+}
+
+export interface IAttendance extends Document {
+  employeeId: string;
+  date: Date;
+  checkIn: Date;
+  checkOut?: Date;
+  breaks: IBreak[];
+  status: "present" | "absent" | "half-day" | "on-break";
+  totalHours?: number;
+  totalBreakTime?: number;
+  totalWorkHours?: number;
+  network?: INetwork;
+  checkInIP?: string;
+  checkOutIP?: string;
+}
+
+const breakSchema = new Schema<IBreak>({
+  breakIn: { type: Date, required: true },
+  breakOut: { type: Date },
+  duration: { type: Number, default: 0 },
+});
+
+const attendanceSchema = new Schema<IAttendance>(
+  {
+    employeeId: {
+      type: String,
+      required: true,
+    },
+    date: {
+      type: Date,
+      required: true,
+    },
+    checkIn: {
+      type: Date,
+      required: true,
+    },
+    checkOut: {
+      type: Date,
+    },
+    breaks: [breakSchema],
+    status: {
+      type: String,
+      enum: ["present", "absent", "half-day", "on-break"],
+      default: "present",
+    },
+    totalHours: {
+      type: Number,
+    },
+    totalBreakTime: {
+      type: Number,
+    },
+    totalWorkHours: {
+      type: Number,
+    },
+    network: {
+      ip: { type: String },
+      ssid: { type: String },
+      ua: { type: String },
+    },
+    checkInIP: {
+      type: String,
+    },
+    checkOutIP: {
+      type: String,
+    },
+  },
+  {
+    timestamps: true,
+  },
+);
+
+attendanceSchema.index({ employeeId: 1, date: 1 }, { unique: true });
+
+const Attendance =
+  (mongoose.models.Attendance as mongoose.Model<IAttendance>) ||
+  mongoose.model<IAttendance>("Attendance", attendanceSchema);
+
+export default Attendance;
+
+===== AUTH / DB HELPERS =====
+import { cookies } from "next/headers";
+import jwt from "jsonwebtoken";
+import { getJwtSecret } from "../jwt";
+
+export type AuthUser = {
+  sub: string;
+  email: string;
+  name: string;
+  role: "admin" | "hr" | "employee";
+};
+
+export async function getAuthUser(): Promise<AuthUser | null> {
+  const cookieStore = await cookies();
+  const token = cookieStore.get("token")?.value;
+
+  if (!token) return null;
+
+  try {
+    const decoded = jwt.verify(token, getJwtSecret()) as AuthUser;
+    return decoded;
+  } catch {
+    return null;
+  }
+}
+export async function getAuthUser() {
+  return {
+    id: "",
+    name: "",
+    email: "",
+    role: "employee",
+  };
+}
+import "server-only";
+import { redirect } from "next/navigation";
+import { getAuthUser } from "./auth";
+
+export async function requireRole(roles: string[]) {
+  const user = await getAuthUser();
+
+  if (!user) redirect("/login");
+
+  if (!roles.includes(user.role)) {
+    redirect("/attendance");
+  }
+
+  return user;
+}
+import mongoose from "mongoose";
+
+const MONGODB_URI = process.env.MONGODB_URI!;
+
+declare global {
+  var _mongooseConn: Promise<typeof mongoose> | undefined;
+}
+
+export async function connectDB() {
+  if (mongoose.connection.readyState === 1) {
+    console.log("Already connected to:", mongoose.connection.name);
+    return mongoose;
+  }
+
+  if (mongoose.connection.readyState === 2 && global._mongooseConn) {
+    return global._mongooseConn;
+  }
+
+  if (!global._mongooseConn) {
+    const dbName = process.env.MONGODB_DB || "webcrest_hr";
+
+    console.log(`Connecting to MongoDB database: ${dbName}`);
+
+    global._mongooseConn = mongoose
+      .connect(MONGODB_URI, {
+        dbName: dbName,
+        retryWrites: true,
+        w: "majority",
+      })
+      .then((m) => {
+        console.log(`Mongo connected to "${m.connection.name}"`);
+        console.log(`Connection state: ${m.connection.readyState}`);
+        return m;
+      })
+      .catch((error) => {
+        console.error("MongoDB connection failed:", error);
+        global._mongooseConn = undefined;
+        throw error;
+      });
+  }
+
+  return global._mongooseConn;
+}
+// src/lib/dbConnect.ts
+import { connectDB } from "@/lib/db";
+
+export default async function dbConnect() {
+  return connectDB();
+}

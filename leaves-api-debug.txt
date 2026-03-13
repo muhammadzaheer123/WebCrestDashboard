@@ -1,0 +1,366 @@
+===== FILE: src/app/api/leaves/route.ts =====
+import { NextRequest, NextResponse } from "next/server";
+import { connectDB } from "../../../lib/db";
+import { getAuthUser } from "@/lib/server/auth";
+import Leave from "@/models/Leave";
+
+// ── helpers ────────────────────────────────────────────────────────────────
+
+function monthKeyFromDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  return `${y}-${m}`;
+}
+
+function businessDaysBetween(
+  start: Date,
+  end: Date,
+  holidays: string[],
+): number {
+  let count = 0;
+  const cur = new Date(start);
+  cur.setHours(0, 0, 0, 0);
+  const fin = new Date(end);
+  fin.setHours(0, 0, 0, 0);
+
+  while (cur <= fin) {
+    const dow = cur.getDay();
+    const ymd = cur.toISOString().slice(0, 10);
+    if (dow !== 0 && dow !== 6 && !holidays.includes(ymd)) count++;
+    cur.setDate(cur.getDate() + 1);
+  }
+  return count;
+}
+
+// ── POST /api/leaves ────────────────────────────────────────────────────────
+
+export async function POST(req: NextRequest) {
+  await connectDB();
+
+  const user = await getAuthUser();
+  if (!user) {
+    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  }
+
+  const userId = user.sub; // AuthUser uses `sub` not `id`
+
+  const body = await req.json();
+  const {
+    type,
+    startDate,
+    endDate,
+    reason,
+    isHalfDay = false,
+    halfDayPart,
+  }: {
+    type: string;
+    startDate: string;
+    endDate: string;
+    reason: string;
+    isHalfDay?: boolean;
+    halfDayPart?: "AM" | "PM";
+  } = body;
+
+  if (!type || !startDate || !endDate || !reason) {
+    return NextResponse.json({ message: "Missing fields" }, { status: 400 });
+  }
+
+  const s = new Date(startDate);
+  const e = new Date(endDate);
+
+  if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime())) {
+    return NextResponse.json({ message: "Invalid dates" }, { status: 400 });
+  }
+  if (s > e) {
+    return NextResponse.json(
+      { error: "endDate must be on/after startDate" },
+      { status: 400 },
+    );
+  }
+  if (isHalfDay && s.getTime() !== e.getTime()) {
+    return NextResponse.json(
+      { error: "Half-day must have same start and end date" },
+      { status: 400 },
+    );
+  }
+  if (isHalfDay && halfDayPart !== "AM" && halfDayPart !== "PM") {
+    return NextResponse.json(
+      { error: "halfDayPart must be AM or PM" },
+      { status: 400 },
+    );
+  }
+
+  const HOLIDAYS: string[] = [];
+
+  const days = isHalfDay ? 0.5 : businessDaysBetween(s, e, HOLIDAYS);
+  if (days <= 0) {
+    return NextResponse.json(
+      { error: "Selected dates contain no business days" },
+      { status: 400 },
+    );
+  }
+
+  // Check for overlapping leaves
+  const overlapping = await Leave.findOne({
+    employeeId: userId,
+    status: { $in: ["pending", "approved"] },
+    $or: [{ startDate: { $lte: e }, endDate: { $gte: s } }],
+  });
+
+  if (overlapping) {
+    return NextResponse.json(
+      {
+        error: "Overlapping leave exists",
+        existing: {
+          id: overlapping._id,
+          startDate: overlapping.startDate,
+          endDate: overlapping.endDate,
+          status: overlapping.status,
+        },
+      },
+      { status: 409 },
+    );
+  }
+
+  // Create leave
+  const leave = await Leave.create({
+    employeeId: userId,
+    employeeName: user.name,
+    employeeEmail: user.email,
+    type,
+    startDate: s,
+    endDate: e,
+    monthKey: monthKeyFromDate(s),
+    days,
+    reason,
+    status: "pending",
+    isHalfDay,
+    halfDayPart: isHalfDay ? halfDayPart : undefined,
+  });
+
+  return NextResponse.json(
+    {
+      status: "success",
+      data: {
+        id: leave._id,
+        type: leave.type,
+        startDate: leave.startDate,
+        endDate: leave.endDate,
+        reason: leave.reason,
+        status: leave.status,
+        days: leave.days,
+      },
+    },
+    { status: 201 },
+  );
+}
+
+===== FILE: src/app/api/leaves/[id]/route.ts =====
+import { NextResponse } from "next/server";
+import Leave from "@/models/Leave";
+import dbConnect from "@/lib/dbConnect";
+import { getAuthUser } from "@/lib/auth"; // placeholder
+
+export async function PATCH(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params;
+  await dbConnect();
+  const user = await getAuthUser();
+
+  const isHR = user.role === "hr" || user.role === "admin";
+  if (!isHR)
+    return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+
+  const body = await req.json();
+  const { status, hrComment } = body; // status: approved/rejected
+
+  if (!["approved", "rejected"].includes(status)) {
+    return NextResponse.json({ message: "Invalid status" }, { status: 400 });
+  }
+
+  const updated = await Leave.findByIdAndUpdate(
+    id,
+    {
+      status,
+      hrComment: hrComment ?? "",
+      decidedBy: user.id,
+      decidedAt: new Date(),
+    },
+    { new: true },
+  );
+
+  if (!updated)
+    return NextResponse.json({ message: "Not found" }, { status: 404 });
+  return NextResponse.json({ leave: updated });
+}
+
+===== FILE: src/app/(panel)/leaves/request/page.tsx =====
+"use client";
+
+import { useMemo, useState } from "react";
+
+function daysInclusive(start?: string, end?: string) {
+  if (!start || !end) return 0;
+  const s = new Date(start);
+  s.setHours(0, 0, 0, 0);
+  const e = new Date(end);
+  e.setHours(0, 0, 0, 0);
+  if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime())) return 0;
+  if (s > e) return 0;
+  return Math.round((e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+}
+
+export default function LeaveRequestPage() {
+  const [type, setType] = useState("Casual");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [reason, setReason] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState<{ type: "ok" | "err"; text: string } | null>(
+    null,
+  );
+
+  const days = useMemo(
+    () => daysInclusive(startDate, endDate),
+    [startDate, endDate],
+  );
+  const monthKey = useMemo(
+    () => (startDate ? startDate.slice(0, 7) : ""),
+    [startDate],
+  );
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setMsg(null);
+
+    if (!startDate || !endDate || !reason.trim()) {
+      setMsg({ type: "err", text: "Please fill all required fields." });
+      return;
+    }
+    if (days <= 0) {
+      setMsg({ type: "err", text: "Dates are invalid." });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetch("/api/leaves", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type, startDate, endDate, reason }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.message || "Failed to submit");
+
+      setMsg({ type: "ok", text: "Leave request submitted successfully." });
+      setStartDate("");
+      setEndDate("");
+      setReason("");
+      setType("Casual");
+    } catch (err: any) {
+      setMsg({ type: "err", text: err.message || "Something went wrong" });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold text-white">Request Leave</h1>
+        <p className="text-white/60">
+          Submit your leave request with dates and reason.
+        </p>
+      </div>
+
+      <div className="rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur">
+        <form onSubmit={onSubmit} className="grid gap-4 md:grid-cols-2">
+          <div className="md:col-span-2 grid gap-3 md:grid-cols-3">
+            <div className="space-y-2">
+              <label className="text-sm text-white/70">Leave Type</label>
+              <select
+                value={type}
+                onChange={(e) => setType(e.target.value)}
+                className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white outline-none"
+              >
+                <option>Casual</option>
+                <option>Sick</option>
+                <option>Annual</option>
+                <option>Unpaid</option>
+                <option>Other</option>
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm text-white/70">Start Date</label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white outline-none"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm text-white/70">End Date</label>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white outline-none"
+              />
+            </div>
+          </div>
+
+          <div className="md:col-span-2 grid gap-3 md:grid-cols-3">
+            <div className="rounded-xl border border-white/10 bg-black/10 p-3">
+              <div className="text-xs text-white/60">Month</div>
+              <div className="text-white">{monthKey || "-"}</div>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-black/10 p-3">
+              <div className="text-xs text-white/60">Total Days</div>
+              <div className="text-white">{days || "-"}</div>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-black/10 p-3">
+              <div className="text-xs text-white/60">Status</div>
+              <div className="text-white">Pending (after submit)</div>
+            </div>
+          </div>
+
+          <div className="md:col-span-2 space-y-2">
+            <label className="text-sm text-white/70">Reason</label>
+            <textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              rows={4}
+              className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white outline-none"
+              placeholder="Write your reason..."
+            />
+          </div>
+
+          <div className="md:col-span-2 flex items-center justify-between gap-3">
+            {msg ? (
+              <div
+                className={`text-sm ${msg.type === "ok" ? "text-emerald-300" : "text-red-300"}`}
+              >
+                {msg.text}
+              </div>
+            ) : (
+              <div />
+            )}
+
+            <button
+              disabled={loading}
+              className="rounded-xl bg-fuchsia-600 px-4 py-2 text-sm font-medium text-white hover:bg-fuchsia-500 disabled:opacity-60"
+            >
+              {loading ? "Submitting..." : "Submit Request"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,53 @@
+===== LEAVE MODEL USAGE =====
+src/app/api/leaves/route.ts:4:import Leave from "@/models/Leave";
+src/app/api/leaves/[id]/route.ts:2:import Leave from "@/models/Leave";
+src/models/Leave.ts:56:  (models.Leave as Model<ILeave>) || model<ILeave>("Leave", LeaveSchema);
+src/models/leaveBalance.model.ts:19:export default models.LeaveBalance ||
+src/models/leaveRequest.model.ts:33:export default models.LeaveRequest ||
+
+===== LEAVE REQUEST MODEL USAGE =====
+src/app/(panel)/leaves/page.tsx:29:  const leaveRequests = [
+src/app/(panel)/leaves/page.tsx:152:            {leaveRequests.length} requests
+src/app/(panel)/leaves/page.tsx:168:              {leaveRequests.map((item) => (
+src/app/(panel)/leaves/page.tsx:191:          {leaveRequests.map((item) => (
+src/app/(panel)/leaves/request/page.tsx:16:export default function LeaveRequestPage() {
+src/models/leaveRequest.model.ts:3:const LeaveRequestSchema = new Schema(
+src/models/leaveRequest.model.ts:32:export type LeaveRequestDoc = InferSchemaType<typeof LeaveRequestSchema>;
+src/models/leaveRequest.model.ts:33:export default models.LeaveRequest ||
+src/models/leaveRequest.model.ts:34:  mongoose.model("LeaveRequest", LeaveRequestSchema);
+
+===== LEAVE BALANCE MODEL USAGE =====
+src/models/leaveBalance.model.ts:3:const LeaveBalanceSchema = new Schema(
+src/models/leaveBalance.model.ts:18:export type LeaveBalanceDoc = InferSchemaType<typeof LeaveBalanceSchema>;
+src/models/leaveBalance.model.ts:19:export default models.LeaveBalance ||
+src/models/leaveBalance.model.ts:20:  mongoose.model("LeaveBalance", LeaveBalanceSchema);
+
+===== API FILE LIST =====
+src/app/api/attendance/break-in/route.ts
+src/app/api/attendance/break-out/route.ts
+src/app/api/attendance/check-in/route.ts
+src/app/api/attendance/check-out/route.ts
+src/app/api/attendance/history/route.ts
+src/app/api/attendance/manual/route.ts
+src/app/api/attendance/route.ts
+src/app/api/attendance/today/route.ts
+src/app/api/auth/forgot-password/route.ts
+src/app/api/auth/login/route.ts
+src/app/api/auth/logout/route.ts
+src/app/api/auth/reset-password/route.ts
+src/app/api/auth/signup/route.ts
+src/app/api/employees/[id]/route.ts
+src/app/api/employees/route.ts
+src/app/api/leaves/[id]/route.ts
+src/app/api/leaves/route.ts
+src/app/api/policies/adjustments/holidays/[id]/route.ts
+src/app/api/policies/adjustments/holidays/route.ts
+src/app/api/policies/adjustments/leave-types/[id]/route.ts
+src/app/api/policies/adjustments/leave-types/route.ts
+src/app/api/policies/adjustments/reset/route.ts
+src/app/api/policies/adjustments/route.ts
+src/app/api/policies/adjustments/shifts/[id]/route.ts
+src/app/api/policies/adjustments/shifts/route.ts
+src/app/api/users/[id]/route.ts
+src/app/api/users/current/route.ts
+src/app/api/users/route.ts
