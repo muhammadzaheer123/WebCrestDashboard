@@ -8,6 +8,7 @@ import EmployeesFilters from "./EmployeesFilters";
 import EmployeeModal from "./EmployeeModal";
 
 type Role = "admin" | "hr" | "employee" | string;
+type EmploymentType = "full-time" | "part-time";
 
 type EmployeeDoc = {
   _id: string;
@@ -22,6 +23,10 @@ type EmployeeDoc = {
   isActive: boolean;
   phone?: string;
   qrCode?: string;
+  employmentType?: EmploymentType;
+  joiningDate?: string;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 type Pagination = {
@@ -45,6 +50,7 @@ export default function EmployeesClient({ user }: { user: User }) {
   const [search, setSearch] = useState("");
   const [department, setDepartment] = useState("");
   const [role, setRole] = useState<Role | "">("");
+  const [employmentType, setEmploymentType] = useState<EmploymentType | "">("");
 
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
@@ -80,10 +86,11 @@ export default function EmployeesClient({ user }: { user: User }) {
         search: search || undefined,
         department: department || undefined,
         role: role || undefined,
+        employmentType: employmentType || undefined,
         page,
         limit,
       }),
-    [search, department, role, page, limit],
+    [search, department, role, employmentType, page, limit],
   );
 
   const fetchJson = async (input: RequestInfo, init?: RequestInit) => {
@@ -116,6 +123,11 @@ export default function EmployeesClient({ user }: { user: User }) {
         : String(item?.isActive).toLowerCase() === "true",
     phone: item?.phone ?? "",
     qrCode: item?.qrCode ?? "",
+    employmentType:
+      item?.employmentType === "part-time" ? "part-time" : "full-time",
+    joiningDate: item?.joiningDate ?? "",
+    createdAt: item?.createdAt ?? "",
+    updatedAt: item?.updatedAt ?? "",
   });
 
   const loadData = useCallback(async () => {
@@ -145,6 +157,7 @@ export default function EmployeesClient({ user }: { user: User }) {
     setSearch("");
     setDepartment("");
     setRole("");
+    setEmploymentType("");
     setPage(1);
   };
 
@@ -196,7 +209,7 @@ export default function EmployeesClient({ user }: { user: User }) {
         <div className="absolute bottom-0 right-0 h-[520px] w-[520px] rounded-full bg-violet-500/10 blur-[140px]" />
       </div>
 
-      <div className="relative w-full">
+      <div className="relative w-full overflow-x-hidden">
         <EmployeesToolbar
           canWrite={!!canWrite}
           totalEmployees={pagination?.totalEmployees ?? 0}
@@ -231,6 +244,7 @@ export default function EmployeesClient({ user }: { user: User }) {
           setPage={setPage}
           limit={limit}
           setLimit={setLimit}
+          currentUserId={user?.id}
         />
 
         {modalOpen && (

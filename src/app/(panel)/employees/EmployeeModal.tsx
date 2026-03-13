@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 
 type Role = "admin" | "hr" | "employee" | string;
+type EmploymentType = "full-time" | "part-time";
 
 type EmployeeDoc = {
   _id: string;
@@ -17,6 +18,7 @@ type EmployeeDoc = {
   salary: number;
   isActive: boolean;
   qrCode?: string;
+  employmentType?: EmploymentType;
 };
 
 const cx = (...cls: Array<string | false | null | undefined>) =>
@@ -37,6 +39,10 @@ async function fetchJson(input: RequestInfo, init?: RequestInit) {
   return data;
 }
 
+function normalizeEmploymentType(value?: string | null): EmploymentType {
+  return value === "part-time" ? "part-time" : "full-time";
+}
+
 export default function EmployeeModal({
   open,
   onClose,
@@ -53,16 +59,16 @@ export default function EmployeeModal({
   const isEdit = !!editing?._id;
 
   const [password, setPassword] = useState("");
-  const [name, setName] = useState(editing?.name || "");
-  const [email, setEmail] = useState(editing?.email || "");
-  const [phone, setPhone] = useState(editing?.phone || "");
-  const [department, setDepartment] = useState(editing?.department || "");
-  const [designation, setDesignation] = useState(editing?.designation || "");
-  const [role, setRole] = useState<Role>(editing?.role || "employee");
-  const [shift, setShift] = useState(editing?.shift || "Morning");
-  const [salary, setSalary] = useState(
-    editing?.salary !== undefined ? String(editing.salary) : "",
-  );
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [department, setDepartment] = useState("");
+  const [designation, setDesignation] = useState("");
+  const [role, setRole] = useState<Role>("employee");
+  const [shift, setShift] = useState("Morning");
+  const [salary, setSalary] = useState("");
+  const [employmentType, setEmploymentType] =
+    useState<EmploymentType>("full-time");
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -79,6 +85,7 @@ export default function EmployeeModal({
     setRole(editing?.role || "employee");
     setShift(editing?.shift || "Morning");
     setSalary(editing?.salary !== undefined ? String(editing.salary) : "");
+    setEmploymentType(normalizeEmploymentType(editing?.employmentType));
     setError(null);
   }, [open, editing]);
 
@@ -134,6 +141,7 @@ export default function EmployeeModal({
         role,
         shift: shift.trim(),
         salary: Number(salary),
+        employmentType,
         ...(password.trim() ? { password } : {}),
       };
 
@@ -299,6 +307,31 @@ export default function EmployeeModal({
               </Field>
             </div>
 
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field label="Employment Type *">
+                <select
+                  value={employmentType}
+                  onChange={(e) =>
+                    setEmploymentType(e.target.value as EmploymentType)
+                  }
+                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-zinc-100 outline-none backdrop-blur-xl transition focus:border-violet-500/40 focus:ring-4 focus:ring-violet-500/15"
+                >
+                  <option
+                    value="full-time"
+                    className="bg-zinc-900 text-zinc-100"
+                  >
+                    Full Time
+                  </option>
+                  <option
+                    value="part-time"
+                    className="bg-zinc-900 text-zinc-100"
+                  >
+                    Part Time
+                  </option>
+                </select>
+              </Field>
+            </div>
+
             {isEdit && (
               <div className="rounded-xl border border-white/10 bg-black/20 p-4 text-sm">
                 <div className="text-zinc-400">
@@ -312,6 +345,15 @@ export default function EmployeeModal({
                   <div className="mt-1 text-zinc-400">
                     <span className="font-medium text-zinc-200">QR:</span>{" "}
                     {editing.qrCode}
+                  </div>
+                )}
+
+                {editing?.employmentType && (
+                  <div className="mt-1 text-zinc-400">
+                    <span className="font-medium text-zinc-200">
+                      Employment Type:
+                    </span>{" "}
+                    {editing.employmentType}
                   </div>
                 )}
               </div>

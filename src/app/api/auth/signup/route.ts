@@ -8,12 +8,15 @@ import Employee from "@/models/Employee";
 export const runtime = "nodejs";
 
 const RoleEnum = z.enum(["admin", "hr"]);
+const EmploymentTypeEnum = z.enum(["full-time", "part-time"]);
 
 const SignupSchema = z.object({
   name: z.string().min(2, "Name is required"),
   email: z.string().email("Invalid email"),
   password: z.string().min(6, "Password must be at least 6 characters"),
   role: RoleEnum,
+  salary: z.coerce.number().min(0, "Salary must be 0 or greater"),
+  employmentType: EmploymentTypeEnum,
 });
 
 const MAX_AGE = 60 * 60 * 8;
@@ -21,7 +24,12 @@ const MAX_AGE = 60 * 60 * 8;
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { name, email, password, role } = SignupSchema.parse(body);
+    console.log("Signup request body:", body);
+
+    const parsed = SignupSchema.parse(body);
+    console.log("Parsed signup data:", parsed);
+
+    const { name, email, password, role, salary, employmentType } = parsed;
 
     const normalizedEmail = email.toLowerCase().trim();
 
@@ -36,19 +44,25 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const user = await Employee.create({
+    const createPayload = {
       employeeId: `ADM${Date.now()}`,
       name: name.trim(),
       email: normalizedEmail,
       password,
       role,
+      salary,
+      employmentType,
       phone: "0000000000",
       department: "Administration",
       designation: role === "admin" ? "Administrator" : "HR Manager",
       shift: "Morning",
       qrCode: `QR_ADMIN_${Date.now()}`,
       isActive: true,
-    });
+    };
+
+    console.log("Employee create payload:", createPayload);
+
+    const user = await Employee.create(createPayload);
 
     const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -84,6 +98,8 @@ export async function POST(req: NextRequest) {
           name: user.name,
           email: user.email,
           role: user.role,
+          salary: user.salary,
+          employmentType: user.employmentType,
         },
       },
       { status: 201 },
@@ -99,6 +115,8 @@ export async function POST(req: NextRequest) {
 
     return res;
   } catch (err) {
+    console.log("Signup route error:", err);
+
     if (err instanceof ZodError) {
       return NextResponse.json(
         {
@@ -118,8 +136,6 @@ export async function POST(req: NextRequest) {
         { status: 409 },
       );
     }
-
-    console.error("Signup error:", err);
 
     return NextResponse.json({ message: "Server error" }, { status: 500 });
   }

@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
     await connectDB();
 
     const user = await Employee.findOne({ email: normalizedEmail }).select(
-      "+password +role +name +email +isActive",
+      "+password +role +name +email +isActive +employmentType",
     );
 
     if (!user || !user.password) {
@@ -68,6 +68,7 @@ export async function POST(req: NextRequest) {
         email: user.email ?? "",
         name: user.name ?? "",
         role: user.role,
+        employmentType: user.employmentType,
       },
       JWT_SECRET,
       {
@@ -85,6 +86,7 @@ export async function POST(req: NextRequest) {
           name: user.name ?? "",
           email: user.email ?? "",
           role: user.role,
+          employmentType: user.employmentType,
         },
       },
       { status: 200 },

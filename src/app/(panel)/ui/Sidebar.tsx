@@ -52,6 +52,7 @@ export default function Sidebar({
           <Link
             key={item.id}
             href={item.path}
+            onClick={() => isMobile && setMobileOpen(false)}
             className={[
               "group flex items-center gap-3 rounded-xl px-3 py-2.5 transition",
               "border border-transparent",

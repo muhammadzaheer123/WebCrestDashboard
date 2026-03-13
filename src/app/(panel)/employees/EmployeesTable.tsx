@@ -12,7 +12,6 @@ import {
   ChevronRight,
   BadgeCheck,
   BadgeX,
-  DollarSign,
 } from "lucide-react";
 
 type Role = "admin" | "hr" | "employee" | string;
@@ -90,6 +89,8 @@ export default function EmployeesTable({
   setPage,
   limit,
   setLimit,
+  currentUserId,
+  deletingEmployeeId,
 }: {
   rows: EmployeeDoc[];
   loading: boolean;
@@ -104,7 +105,13 @@ export default function EmployeesTable({
   setPage: (v: number) => void;
   limit: number;
   setLimit: (v: number) => void;
+  currentUserId?: string;
+  deletingEmployeeId?: string | null;
 }) {
+  const visibleRows = currentUserId
+    ? rows.filter((r) => r._id !== currentUserId)
+    : rows;
+
   const loadingNode = (
     <div className="flex items-center justify-center gap-3 text-zinc-400">
       <RefreshCw className="h-4 w-4 animate-spin" />
@@ -166,10 +173,9 @@ export default function EmployeesTable({
   );
 
   return (
-    <div className="mt-6 overflow-hidden rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl">
-      {/* ── Desktop table (md+) ── */}
+    <div className="mt-6 w-full min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl">
       <div className="hidden md:block">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto" style={{ contain: "inline-size" }}>
           <table className="w-full min-w-[1200px] text-left text-sm">
             <thead className="sticky top-0 z-10 bg-black/40 backdrop-blur-xl">
               <tr className="text-xs text-zinc-400">
@@ -209,117 +215,121 @@ export default function EmployeesTable({
                     {errorNode}
                   </td>
                 </tr>
-              ) : rows.length === 0 ? (
+              ) : visibleRows.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="px-5 py-14">
                     {emptyNode}
                   </td>
                 </tr>
               ) : (
-                rows.map((r) => (
-                  <tr
-                    key={r._id}
-                    className="border-t border-white/5 transition hover:bg-white/5"
-                  >
-                    {/* Employee */}
-                    <td className="px-5 py-3.5">
-                      <div className="whitespace-nowrap font-medium text-zinc-200">
-                        {r.name}
-                      </div>
-                      <div className="text-xs text-zinc-500">
-                        {r.employeeId}
-                      </div>
-                    </td>
+                visibleRows.map((r) => {
+                  const isDeleting = deletingEmployeeId === r._id;
 
-                    {/* Email — truncated with tooltip */}
-                    <td className="px-5 py-3.5">
-                      <span
-                        className="block max-w-[160px] truncate text-zinc-300"
-                        title={r.email}
-                      >
-                        {r.email}
-                      </span>
-                    </td>
+                  return (
+                    <tr
+                      key={r._id}
+                      className="border-t border-white/5 transition hover:bg-white/5"
+                    >
+                      <td className="px-5 py-3.5">
+                        <div className="whitespace-nowrap font-medium text-zinc-200">
+                          {r.name}
+                        </div>
+                        <div className="text-xs text-zinc-500">
+                          {r.employeeId}
+                        </div>
+                      </td>
 
-                    {/* Department */}
-                    <td className="whitespace-nowrap px-5 py-3.5 text-zinc-300">
-                      {r.department}
-                    </td>
-
-                    {/* Designation */}
-                    <td className="whitespace-nowrap px-5 py-3.5 text-zinc-300">
-                      {r.designation}
-                    </td>
-
-                    {/* Role */}
-                    <td className="px-5 py-3.5">
-                      <span
-                        className={cx(
-                          "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium capitalize whitespace-nowrap",
-                          rolePill(r.role),
-                        )}
-                      >
-                        {r.role}
-                      </span>
-                    </td>
-
-                    {/* Shift */}
-                    <td className="whitespace-nowrap px-5 py-3.5 text-zinc-300">
-                      {r.shift}
-                    </td>
-
-                    {/* Salary */}
-                    <td className="whitespace-nowrap px-5 py-3.5 text-zinc-300 tabular-nums">
-                      {formatSalary(r.salary)}
-                    </td>
-
-                    {/* Status */}
-                    <td className="px-5 py-3.5">
-                      <span
-                        className={cx(
-                          "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium whitespace-nowrap",
-                          statusPill(r.isActive),
-                        )}
-                      >
-                        {r.isActive ? (
-                          <BadgeCheck className="h-3.5 w-3.5" />
-                        ) : (
-                          <BadgeX className="h-3.5 w-3.5" />
-                        )}
-                        {r.isActive ? "Active" : "Inactive"}
-                      </span>
-                    </td>
-
-                    {/* Actions */}
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => onEdit(r)}
-                          disabled={!canWrite}
-                          className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-zinc-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                      <td className="px-5 py-3.5">
+                        <span
+                          className="block max-w-[160px] truncate text-zinc-300"
+                          title={r.email}
                         >
-                          <Pencil className="h-3.5 w-3.5" />
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => onDelete(r)}
-                          disabled={!canWrite}
-                          className="inline-flex items-center gap-1.5 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs text-red-400 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                          {r.email}
+                        </span>
+                      </td>
+
+                      <td className="whitespace-nowrap px-5 py-3.5 text-zinc-300">
+                        {r.department}
+                      </td>
+
+                      <td className="whitespace-nowrap px-5 py-3.5 text-zinc-300">
+                        {r.designation}
+                      </td>
+
+                      <td className="px-5 py-3.5">
+                        <span
+                          className={cx(
+                            "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium capitalize whitespace-nowrap",
+                            rolePill(r.role),
+                          )}
                         >
-                          <Trash2 className="h-3.5 w-3.5" />
-                          Delete
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                          {r.role}
+                        </span>
+                      </td>
+
+                      <td className="whitespace-nowrap px-5 py-3.5 text-zinc-300">
+                        {r.shift}
+                      </td>
+
+                      <td className="whitespace-nowrap px-5 py-3.5 text-zinc-300 tabular-nums">
+                        {formatSalary(r.salary)}
+                      </td>
+
+                      <td className="px-5 py-3.5">
+                        <span
+                          className={cx(
+                            "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium whitespace-nowrap",
+                            statusPill(r.isActive),
+                          )}
+                        >
+                          {r.isActive ? (
+                            <BadgeCheck className="h-3.5 w-3.5" />
+                          ) : (
+                            <BadgeX className="h-3.5 w-3.5" />
+                          )}
+                          {r.isActive ? "Active" : "Inactive"}
+                        </span>
+                      </td>
+
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => onEdit(r)}
+                            disabled={!canWrite || isDeleting}
+                            className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-zinc-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                            Edit
+                          </button>
+
+                          <button
+                            onClick={() => onDelete(r)}
+                            disabled={!canWrite || isDeleting}
+                            className="inline-flex min-w-[92px] items-center justify-center gap-1.5 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs text-red-400 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {isDeleting ? (
+                              <>
+                                <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                                Deleting...
+                              </>
+                            ) : (
+                              <>
+                                <Trash2 className="h-3.5 w-3.5" />
+                                Delete
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* ── Mobile cards (< md) ── */}
       <div className="md:hidden">
         {loading ? (
           <div className="flex items-center justify-center gap-3 p-10 text-zinc-400">
@@ -328,95 +338,105 @@ export default function EmployeesTable({
           </div>
         ) : error ? (
           <div className="p-5">{errorNode}</div>
-        ) : rows.length === 0 ? (
+        ) : visibleRows.length === 0 ? (
           <div className="p-5">{emptyNode}</div>
         ) : (
           <div className="space-y-3 p-4">
-            {rows.map((r) => (
-              <div
-                key={r._id}
-                className="overflow-hidden rounded-2xl border border-white/10 bg-black/20"
-              >
-                {/* Card header */}
-                <div className="flex items-start justify-between gap-3 border-b border-white/5 p-4">
-                  <div className="min-w-0">
-                    <h3 className="truncate text-sm font-semibold text-zinc-200">
-                      {r.name}
-                    </h3>
-                    <p className="mt-0.5 text-xs text-zinc-500">
-                      {r.employeeId}
-                    </p>
+            {visibleRows.map((r) => {
+              const isDeleting = deletingEmployeeId === r._id;
+
+              return (
+                <div
+                  key={r._id}
+                  className="overflow-hidden rounded-2xl border border-white/10 bg-black/20"
+                >
+                  <div className="flex items-start justify-between gap-3 border-b border-white/5 p-4">
+                    <div className="min-w-0">
+                      <h3 className="truncate text-sm font-semibold text-zinc-200">
+                        {r.name}
+                      </h3>
+                      <p className="mt-0.5 text-xs text-zinc-500">
+                        {r.employeeId}
+                      </p>
+                    </div>
+                    <span
+                      className={cx(
+                        "inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium",
+                        statusPill(r.isActive),
+                      )}
+                    >
+                      {r.isActive ? (
+                        <BadgeCheck className="h-3.5 w-3.5" />
+                      ) : (
+                        <BadgeX className="h-3.5 w-3.5" />
+                      )}
+                      {r.isActive ? "Active" : "Inactive"}
+                    </span>
                   </div>
-                  <span
-                    className={cx(
-                      "inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium",
-                      statusPill(r.isActive),
-                    )}
-                  >
-                    {r.isActive ? (
-                      <BadgeCheck className="h-3.5 w-3.5" />
-                    ) : (
-                      <BadgeX className="h-3.5 w-3.5" />
-                    )}
-                    {r.isActive ? "Active" : "Inactive"}
-                  </span>
-                </div>
 
-                {/* Card body — 2-col grid */}
-                <div className="grid grid-cols-2 gap-x-4 gap-y-3 p-4">
-                  <Field
-                    label="Email"
-                    value={
-                      <span className="block truncate" title={r.email}>
-                        {r.email}
-                      </span>
-                    }
-                  />
-                  <Field label="Department" value={r.department} />
-                  <Field label="Designation" value={r.designation} />
-                  <Field label="Shift" value={r.shift} />
-                  <Field label="Salary" value={formatSalary(r.salary)} />
-                  <Field
-                    label="Role"
-                    value={
-                      <span
-                        className={cx(
-                          "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium capitalize",
-                          rolePill(r.role),
-                        )}
-                      >
-                        {r.role}
-                      </span>
-                    }
-                  />
-                </div>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-3 p-4">
+                    <Field
+                      label="Email"
+                      value={
+                        <span className="block truncate" title={r.email}>
+                          {r.email}
+                        </span>
+                      }
+                    />
+                    <Field label="Department" value={r.department} />
+                    <Field label="Designation" value={r.designation} />
+                    <Field label="Shift" value={r.shift} />
+                    <Field label="Salary" value={formatSalary(r.salary)} />
+                    <Field
+                      label="Role"
+                      value={
+                        <span
+                          className={cx(
+                            "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium capitalize",
+                            rolePill(r.role),
+                          )}
+                        >
+                          {r.role}
+                        </span>
+                      }
+                    />
+                  </div>
 
-                {/* Card actions */}
-                <div className="flex gap-2 border-t border-white/5 p-3">
-                  <button
-                    onClick={() => onEdit(r)}
-                    disabled={!canWrite}
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-xs text-zinc-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => onDelete(r)}
-                    disabled={!canWrite}
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2.5 text-xs text-red-400 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    Delete
-                  </button>
+                  <div className="flex gap-2 border-t border-white/5 p-3">
+                    <button
+                      onClick={() => onEdit(r)}
+                      disabled={!canWrite || isDeleting}
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-xs text-zinc-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                      Edit
+                    </button>
+
+                    <button
+                      onClick={() => onDelete(r)}
+                      disabled={!canWrite || isDeleting}
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2.5 text-xs text-red-400 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {isDeleting ? (
+                        <>
+                          <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                          Deleting...
+                        </>
+                      ) : (
+                        <>
+                          <Trash2 className="h-3.5 w-3.5" />
+                          Delete
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
 
-      {/* ── Pagination ── */}
       {pagination && (
         <div className="flex flex-col gap-3 border-t border-white/10 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
           <span className="text-xs text-zinc-400">

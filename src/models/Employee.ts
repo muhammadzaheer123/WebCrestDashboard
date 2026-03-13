@@ -19,6 +19,8 @@ export interface IEmployee {
   resetOtpExpire?: number;
   createdAt?: Date;
   updatedAt?: Date;
+
+  employmentType: "full-time" | "part-time";
 }
 
 export type EmployeeDocument = HydratedDocument<IEmployee>;
@@ -26,7 +28,9 @@ export type EmployeeDocument = HydratedDocument<IEmployee>;
 const employeeSchema = new Schema<IEmployee>(
   {
     employeeId: { type: String, required: true, unique: true },
+
     name: { type: String, required: true },
+
     email: {
       type: String,
       required: true,
@@ -34,21 +38,40 @@ const employeeSchema = new Schema<IEmployee>(
       lowercase: true,
       trim: true,
     },
+
     phone: { type: String, required: true },
+
     department: { type: String, required: true },
+
     designation: { type: String, required: true },
+
     role: {
       type: String,
       enum: ["admin", "hr", "employee"],
       default: "employee",
     },
+
     shift: { type: String, required: true },
+
     salary: { type: Number, required: true, min: 0 },
+
     password: { type: String, required: true, select: false },
+
+    employmentType: {
+      type: String,
+      enum: ["full-time", "part-time"],
+      required: true,
+      default: "full-time",
+    },
+
     qrCode: { type: String, required: true },
+
     isActive: { type: Boolean, default: true },
+
     joiningDate: { type: Date, default: Date.now },
+
     resetOtp: { type: String, select: false },
+
     resetOtpExpire: { type: Number, select: false },
   },
   { timestamps: true },

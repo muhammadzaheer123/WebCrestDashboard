@@ -21,6 +21,8 @@ export async function POST(request: NextRequest) {
       "designation",
       "shift",
       "salary",
+      "password",
+      "employmentType",
     ];
 
     const missingFields = requiredFields.filter(
@@ -49,17 +51,8 @@ export async function POST(request: NextRequest) {
       shift,
       salary,
       password,
+      employmentType,
     } = body;
-
-    if (!password) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Password is required",
-        },
-        { status: 400 },
-      );
-    }
 
     const parsedSalary = Number(salary);
 
@@ -73,7 +66,29 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const existingEmployee = await Employee.findOne({ email });
+    if (!["admin", "hr", "employee"].includes(role)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Role must be one of: admin, hr, employee",
+        },
+        { status: 400 },
+      );
+    }
+
+    if (!["full-time", "part-time"].includes(employmentType)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "employmentType must be either full-time or part-time",
+        },
+        { status: 400 },
+      );
+    }
+
+    const normalizedEmail = String(email).trim().toLowerCase();
+
+    const existingEmployee = await Employee.findOne({ email: normalizedEmail });
     if (existingEmployee) {
       return NextResponse.json(
         {
@@ -84,19 +99,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const qrCode = await generateQRCode(email);
+    const qrCode = await generateQRCode(normalizedEmail);
 
     const employee = new Employee({
       employeeId: `EMP${Date.now()}`,
-      name,
-      email,
-      phone,
-      department,
-      designation,
+      name: String(name).trim(),
+      email: normalizedEmail,
+      phone: String(phone).trim(),
+      department: String(department).trim(),
+      designation: String(designation).trim(),
       role,
-      shift,
+      shift: String(shift).trim(),
       salary: parsedSalary,
-      password,
+      password: String(password),
+      employmentType,
       qrCode,
     });
 
@@ -113,9 +129,12 @@ export async function POST(request: NextRequest) {
       role: employee.role,
       shift: employee.shift,
       salary: employee.salary,
+      employmentType: employee.employmentType,
       qrCode: employee.qrCode,
       isActive: employee.isActive,
       joiningDate: employee.joiningDate,
+      createdAt: employee.createdAt,
+      updatedAt: employee.updatedAt,
     };
 
     return NextResponse.json(
@@ -172,12 +191,14 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get("limit") || "10", 10);
     const department = searchParams.get("department");
     const role = searchParams.get("role");
+    const employmentType = searchParams.get("employmentType");
     const search = searchParams.get("search");
 
     const filter: Record<string, any> = { isActive: true };
 
     if (department) filter.department = department;
     if (role) filter.role = role;
+    if (employmentType) filter.employmentType = employmentType;
 
     if (search) {
       filter.$or = [
@@ -186,13 +207,14 @@ export async function GET(request: NextRequest) {
         { employeeId: { $regex: search, $options: "i" } },
         { designation: { $regex: search, $options: "i" } },
         { department: { $regex: search, $options: "i" } },
+        { employmentType: { $regex: search, $options: "i" } },
       ];
     }
 
     const skip = (page - 1) * limit;
 
     const employees = await Employee.find(filter)
-      .select("-password -__v")
+      .select("-password -resetOtp -resetOtpExpire -__v")
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);

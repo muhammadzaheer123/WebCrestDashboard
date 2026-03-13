@@ -43,6 +43,19 @@ export async function PUT(
     const { id } = await params;
     const body = await request.json();
 
+    // added validation for employmentType
+    if (
+      body.employmentType &&
+      !["full-time", "part-time"].includes(body.employmentType)
+    ) {
+      return NextResponse.json(
+        {
+          error: "employmentType must be either 'full-time' or 'part-time'",
+        },
+        { status: 400 },
+      );
+    }
+
     const employee = await Employee.findByIdAndUpdate(id, body, {
       new: true,
       runValidators: true,
