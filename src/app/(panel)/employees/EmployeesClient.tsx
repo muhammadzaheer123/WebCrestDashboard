@@ -18,7 +18,10 @@ type EmployeeDoc = {
   designation: string;
   role: Role;
   shift: string;
+  salary: number;
   isActive: boolean;
+  phone?: string;
+  qrCode?: string;
 };
 
 type Pagination = {
@@ -51,14 +54,23 @@ export default function EmployeesClient({ user }: { user: User }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editing, setEditing] = useState<EmployeeDoc | null>(null);
+
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<EmployeeDoc | null>(null);
+
   const buildQuery = (
     params: Record<string, string | number | undefined | null>,
   ) => {
     const usp = new URLSearchParams();
+
     Object.entries(params).forEach(([k, v]) => {
-      if (v !== undefined && v !== null && String(v).length)
+      if (v !== undefined && v !== null && String(v).length > 0) {
         usp.set(k, String(v));
+      }
     });
+
     return usp.toString();
   };
 
@@ -79,11 +91,32 @@ export default function EmployeesClient({ user }: { user: User }) {
     const data = await res.json();
 
     if (!res.ok) {
-      throw new Error(data?.error || "Request failed");
+      throw new Error(data?.error || data?.message || "Request failed");
     }
 
     return data;
   };
+
+  const normalizeEmployee = (item: any): EmployeeDoc => ({
+    _id: item?._id ?? item?.id ?? "",
+    employeeId: item?.employeeId ?? "",
+    name: item?.name ?? "",
+    email: item?.email ?? "",
+    department: item?.department ?? "",
+    designation: item?.designation ?? "",
+    role: item?.role ?? "employee",
+    shift: item?.shift ?? "",
+    salary:
+      typeof item?.salary === "number"
+        ? item.salary
+        : Number(item?.salary ?? 0),
+    isActive:
+      typeof item?.isActive === "boolean"
+        ? item.isActive
+        : String(item?.isActive).toLowerCase() === "true",
+    phone: item?.phone ?? "",
+    qrCode: item?.qrCode ?? "",
+  });
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -91,10 +124,14 @@ export default function EmployeesClient({ user }: { user: User }) {
 
     try {
       const res = await fetchJson(`/api/employees?${query}`);
-      setRows(res?.data?.employees || []);
+      const employees = Array.isArray(res?.data?.employees)
+        ? res.data.employees.map(normalizeEmployee)
+        : [];
+
+      setRows(employees);
       setPagination(res?.data?.pagination || null);
     } catch (e: any) {
-      setError(e.message);
+      setError(e.message || "Failed to load employees");
     } finally {
       setLoading(false);
     }
@@ -110,9 +147,6 @@ export default function EmployeesClient({ user }: { user: User }) {
     setRole("");
     setPage(1);
   };
-
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editing, setEditing] = useState<EmployeeDoc | null>(null);
 
   const openCreate = () => {
     if (!canWrite) return;
@@ -131,9 +165,6 @@ export default function EmployeesClient({ user }: { user: User }) {
     setEditing(null);
     loadData();
   };
-
-  const [deleteOpen, setDeleteOpen] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<EmployeeDoc | null>(null);
 
   const openDelete = (row: EmployeeDoc) => {
     if (!canWrite) return;
@@ -158,62 +189,69 @@ export default function EmployeesClient({ user }: { user: User }) {
   };
 
   return (
-    <div className="relative w-full text-white">
-      <EmployeesToolbar
-        canWrite={!!canWrite}
-        totalEmployees={pagination?.totalEmployees ?? 0}
-        onRefresh={loadData}
-        onCreate={openCreate}
-      />
+    <div className="min-h-screen text-zinc-100">
+      <div className="pointer-events-none fixed inset-0">
+        <div className="absolute -top-40 left-1/2 h-[520px] w-[520px] -translate-x-1/2 rounded-full bg-violet-600/20 blur-[120px]" />
+        <div className="absolute top-48 -left-40 h-[420px] w-[420px] rounded-full bg-fuchsia-600/10 blur-[120px]" />
+        <div className="absolute bottom-0 right-0 h-[520px] w-[520px] rounded-full bg-violet-500/10 blur-[140px]" />
+      </div>
 
-      <EmployeesFilters
-        search={search}
-        department={department}
-        role={role}
-        setSearch={setSearch}
-        setDepartment={setDepartment}
-        setRole={setRole}
-        onReset={resetFilters}
-        onApply={() => {
-          setPage(1);
-          loadData();
-        }}
-      />
-
-      <EmployeesTable
-        rows={rows}
-        loading={loading}
-        error={error}
-        canWrite={!!canWrite}
-        pagination={pagination}
-        onEdit={openEdit}
-        onDelete={openDelete}
-        onResetFilters={resetFilters}
-        onCreate={openCreate}
-        page={page}
-        setPage={setPage}
-        limit={limit}
-        setLimit={setLimit}
-      />
-
-      {modalOpen && (
-        <EmployeeModal
-          open={modalOpen}
-          onClose={() => setModalOpen(false)}
-          onSaved={onSaved}
-          editing={editing}
+      <div className="relative w-full">
+        <EmployeesToolbar
           canWrite={!!canWrite}
+          totalEmployees={pagination?.totalEmployees ?? 0}
+          onRefresh={loadData}
+          onCreate={openCreate}
         />
-      )}
 
-      <ConfirmDeleteModal
-        open={deleteOpen}
-        onClose={closeDelete}
-        onConfirm={onDelete}
-        title="Delete employee"
-        description="Are you sure you want to delete this employee?"
-        meta={deleteTarget?.name}
-      />
+        <EmployeesFilters
+          search={search}
+          department={department}
+          role={role}
+          setSearch={setSearch}
+          setDepartment={setDepartment}
+          setRole={setRole}
+          onReset={resetFilters}
+          onApply={() => {
+            setPage(1);
+          }}
+        />
+
+        <EmployeesTable
+          rows={rows}
+          loading={loading}
+          error={error}
+          canWrite={!!canWrite}
+          pagination={pagination}
+          onEdit={openEdit}
+          onDelete={openDelete}
+          onResetFilters={resetFilters}
+          onCreate={openCreate}
+          page={page}
+          setPage={setPage}
+          limit={limit}
+          setLimit={setLimit}
+        />
+
+        {modalOpen && (
+          <EmployeeModal
+            open={modalOpen}
+            onClose={() => setModalOpen(false)}
+            onSaved={onSaved}
+            editing={editing}
+            canWrite={!!canWrite}
+          />
+        )}
+
+        <ConfirmDeleteModal
+          open={deleteOpen}
+          onClose={closeDelete}
+          onConfirm={onDelete}
+          title="Delete employee"
+          description="Are you sure you want to delete this employee?"
+          meta={deleteTarget?.name}
+        />
+      </div>
     </div>
   );
 }

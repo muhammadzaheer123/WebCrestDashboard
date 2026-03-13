@@ -3,8 +3,6 @@ import { connectDB } from "../../../lib/db";
 import { getAuthUser } from "@/lib/server/auth";
 import Leave from "@/models/Leave";
 
-// ── helpers ────────────────────────────────────────────────────────────────
-
 function monthKeyFromDate(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -28,10 +26,106 @@ function businessDaysBetween(
     if (dow !== 0 && dow !== 6 && !holidays.includes(ymd)) count++;
     cur.setDate(cur.getDate() + 1);
   }
+
   return count;
 }
 
-// ── POST /api/leaves ────────────────────────────────────────────────────────
+export async function GET(req: NextRequest) {
+  await connectDB();
+
+  const user = await getAuthUser();
+  if (!user) {
+    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  }
+
+  const { searchParams } = new URL(req.url);
+
+  const page = Math.max(Number(searchParams.get("page") || 1), 1);
+  const limit = Math.max(Number(searchParams.get("limit") || 10), 1);
+  const status = searchParams.get("status")?.trim() || "";
+  const q = searchParams.get("q")?.trim() || "";
+
+  const isHR = user.role === "admin" || user.role === "hr";
+
+  const filter: Record<string, any> = {};
+
+  if (!isHR) {
+    filter.employeeId = user.sub;
+  }
+
+  if (
+    status &&
+    ["pending", "approved", "rejected", "cancelled"].includes(status)
+  ) {
+    filter.status = status;
+  }
+
+  if (q) {
+    filter.$or = [
+      { employeeName: { $regex: q, $options: "i" } },
+      { employeeEmail: { $regex: q, $options: "i" } },
+      { type: { $regex: q, $options: "i" } },
+      { reason: { $regex: q, $options: "i" } },
+    ];
+  }
+
+  const skip = (page - 1) * limit;
+  const now = new Date();
+
+  const [rows, total, pending, approved, rejected, cancelled, onLeave] =
+    await Promise.all([
+      Leave.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+      Leave.countDocuments(filter),
+      Leave.countDocuments({ ...filter, status: "pending" }),
+      Leave.countDocuments({ ...filter, status: "approved" }),
+      Leave.countDocuments({ ...filter, status: "rejected" }),
+      Leave.countDocuments({ ...filter, status: "cancelled" }),
+      Leave.countDocuments({
+        ...filter,
+        status: "approved",
+        startDate: { $lte: now },
+        endDate: { $gte: now },
+      }),
+    ]);
+
+  return NextResponse.json({
+    status: "success",
+    data: rows.map((item: any) => ({
+      id: String(item._id),
+      employeeId: String(item.employeeId),
+      employeeName: item.employeeName,
+      employeeEmail: item.employeeEmail,
+      type: item.type,
+      startDate: item.startDate,
+      endDate: item.endDate,
+      monthKey: item.monthKey,
+      days: item.days,
+      reason: item.reason,
+      status: item.status,
+      hrComment: item.hrComment || "",
+      decidedBy: item.decidedBy ? String(item.decidedBy) : null,
+      decidedAt: item.decidedAt || null,
+      createdAt: item.createdAt || null,
+      updatedAt: item.updatedAt || null,
+    })),
+    pagination: {
+      currentPage: page,
+      totalPages: Math.max(Math.ceil(total / limit), 1),
+      totalItems: total,
+      hasNext: page * limit < total,
+      hasPrev: page > 1,
+      limit,
+    },
+    summary: {
+      total,
+      pending,
+      approved,
+      rejected,
+      cancelled,
+      onLeave,
+    },
+  });
+}
 
 export async function POST(req: NextRequest) {
   await connectDB();
@@ -41,7 +135,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
 
-  const userId = user.sub; // AuthUser uses `sub` not `id`
+  const userId = user.sub;
 
   const body = await req.json();
   const {
@@ -70,18 +164,21 @@ export async function POST(req: NextRequest) {
   if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime())) {
     return NextResponse.json({ message: "Invalid dates" }, { status: 400 });
   }
+
   if (s > e) {
     return NextResponse.json(
       { error: "endDate must be on/after startDate" },
       { status: 400 },
     );
   }
+
   if (isHalfDay && s.getTime() !== e.getTime()) {
     return NextResponse.json(
       { error: "Half-day must have same start and end date" },
       { status: 400 },
     );
   }
+
   if (isHalfDay && halfDayPart !== "AM" && halfDayPart !== "PM") {
     return NextResponse.json(
       { error: "halfDayPart must be AM or PM" },
@@ -90,8 +187,8 @@ export async function POST(req: NextRequest) {
   }
 
   const HOLIDAYS: string[] = [];
-
   const days = isHalfDay ? 0.5 : businessDaysBetween(s, e, HOLIDAYS);
+
   if (days <= 0) {
     return NextResponse.json(
       { error: "Selected dates contain no business days" },
@@ -99,11 +196,11 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Check for overlapping leaves
   const overlapping = await Leave.findOne({
     employeeId: userId,
     status: { $in: ["pending", "approved"] },
-    $or: [{ startDate: { $lte: e }, endDate: { $gte: s } }],
+    startDate: { $lte: e },
+    endDate: { $gte: s },
   });
 
   if (overlapping) {
@@ -121,7 +218,6 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Create leave
   const leave = await Leave.create({
     employeeId: userId,
     employeeName: user.name,
@@ -133,8 +229,7 @@ export async function POST(req: NextRequest) {
     days,
     reason,
     status: "pending",
-    isHalfDay,
-    halfDayPart: isHalfDay ? halfDayPart : undefined,
+    hrComment: "",
   });
 
   return NextResponse.json(

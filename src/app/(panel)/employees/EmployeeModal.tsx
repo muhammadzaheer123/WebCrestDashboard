@@ -14,6 +14,7 @@ type EmployeeDoc = {
   designation: string;
   role: Role;
   shift: string;
+  salary: number;
   isActive: boolean;
   qrCode?: string;
 };
@@ -24,11 +25,15 @@ const cx = (...cls: Array<string | false | null | undefined>) =>
 async function fetchJson(input: RequestInfo, init?: RequestInit) {
   const res = await fetch(input, init);
   let data: any = null;
+
   try {
     data = await res.json();
   } catch {}
-  if (!res.ok)
+
+  if (!res.ok) {
     throw new Error(data?.error || data?.message || "Request failed");
+  }
+
   return data;
 }
 
@@ -46,6 +51,7 @@ export default function EmployeeModal({
   canWrite: boolean;
 }) {
   const isEdit = !!editing?._id;
+
   const [password, setPassword] = useState("");
   const [name, setName] = useState(editing?.name || "");
   const [email, setEmail] = useState(editing?.email || "");
@@ -54,13 +60,17 @@ export default function EmployeeModal({
   const [designation, setDesignation] = useState(editing?.designation || "");
   const [role, setRole] = useState<Role>(editing?.role || "employee");
   const [shift, setShift] = useState(editing?.shift || "Morning");
+  const [salary, setSalary] = useState(
+    editing?.salary !== undefined ? String(editing.salary) : "",
+  );
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // reset values when opening modal / switching edit target
   useEffect(() => {
     if (!open) return;
+
+    setPassword("");
     setName(editing?.name || "");
     setEmail(editing?.email || "");
     setPhone(editing?.phone || "");
@@ -68,12 +78,17 @@ export default function EmployeeModal({
     setDesignation(editing?.designation || "");
     setRole(editing?.role || "employee");
     setShift(editing?.shift || "Morning");
+    setSalary(editing?.salary !== undefined ? String(editing.salary) : "");
     setError(null);
   }, [open, editing]);
 
   useEffect(() => {
     if (!open) return;
-    const onEsc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+
     window.addEventListener("keydown", onEsc);
     return () => window.removeEventListener("keydown", onEsc);
   }, [open, onClose]);
@@ -85,27 +100,41 @@ export default function EmployeeModal({
     if (!department.trim()) return "Department is required";
     if (!designation.trim()) return "Designation is required";
     if (!shift.trim()) return "Shift is required";
+    if (!salary.trim()) return "Salary is required";
+
+    const parsedSalary = Number(salary);
+    if (Number.isNaN(parsedSalary) || parsedSalary < 0) {
+      return "Salary must be a valid number greater than or equal to 0";
+    }
+
+    if (!isEdit && !password.trim()) return "Password is required";
+
     return null;
   };
 
   const submit = async () => {
     if (!canWrite) return;
+
     const v = validate();
-    if (v) return setError(v);
+    if (v) {
+      setError(v);
+      return;
+    }
 
     setSubmitting(true);
     setError(null);
 
     try {
       const payload = {
-        name,
-        email,
-        phone,
-        department,
-        designation,
+        name: name.trim(),
+        email: email.trim(),
+        phone: phone.trim(),
+        department: department.trim(),
+        designation: designation.trim(),
         role,
-        shift,
-        password,
+        shift: shift.trim(),
+        salary: Number(salary),
+        ...(password.trim() ? { password } : {}),
       };
 
       if (isEdit) {
@@ -134,43 +163,50 @@ export default function EmployeeModal({
 
   return (
     <div className="fixed inset-0 z-[9999]" role="dialog" aria-modal="true">
-      <div className="absolute inset-0 bg-black/70" onClick={onClose} />
-
       <div
-        className={cx(
-          "absolute right-0 top-0 h-full w-full max-w-lg",
-          "border-l border-white/10 bg-[#0B0616] text-white",
-          "shadow-[0_20px_90px_rgba(0,0,0,0.75)]",
-        )}
-      >
-        <header className="flex items-center justify-between border-b border-white/10 p-5">
-          <div>
-            <h2 className="text-lg font-semibold">
-              {isEdit ? "Edit" : "New"} Employee
-            </h2>
-            <p className="text-xs text-white/55">
-              {isEdit ? "Update details and save" : "Fill details and create"}
-            </p>
+        className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+        onClick={onClose}
+      />
+
+      <div className="absolute right-0 top-0 flex h-full w-full max-w-lg flex-col border-l border-white/10 bg-[#08040f] text-zinc-100 shadow-[0_20px_90px_rgba(0,0,0,0.75)]">
+        <header className="flex items-center justify-between border-b border-white/10 px-5 py-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-gradient-to-br from-violet-500/20 to-fuchsia-500/10 shadow-sm shadow-violet-500/10">
+              <span className="text-sm">{isEdit ? "✏️" : "➕"}</span>
+            </div>
+
+            <div>
+              <h2 className="text-base font-semibold tracking-tight">
+                {isEdit ? "Edit" : "New"} Employee
+              </h2>
+              <p className="text-xs text-zinc-400">
+                {isEdit ? "Update details and save" : "Fill details and create"}
+              </p>
+            </div>
           </div>
 
           <button
             onClick={onClose}
-            className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
+            className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-zinc-300 transition hover:bg-white/10"
           >
             Close
           </button>
         </header>
 
-        <div className="h-[calc(100%-72px-76px)] overflow-y-auto p-5">
+        <div className="flex-1 overflow-y-auto p-5">
           {error && (
-            <div className="mb-4 rounded-2xl border border-rose-400/20 bg-rose-500/10 p-3 text-sm text-rose-200">
+            <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">
               {error}
             </div>
           )}
 
           <div className="grid grid-cols-1 gap-4">
             <Field label="Name *">
-              <Input value={name} onChange={(e) => setName(e.target.value)} />
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Full name"
+              />
             </Field>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -179,19 +215,37 @@ export default function EmployeeModal({
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  placeholder="email@company.com"
                 />
               </Field>
-              <Field label="Password *">
+
+              <Field label={isEdit ? "Password" : "Password *"}>
                 <Input
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  placeholder={
+                    isEdit ? "Leave blank to keep current password" : "••••••••"
+                  }
                 />
               </Field>
+
               <Field label="Phone *">
                 <Input
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
+                  placeholder="+1 234 567 890"
+                />
+              </Field>
+
+              <Field label="Salary *">
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={salary}
+                  onChange={(e) => setSalary(e.target.value)}
+                  placeholder="50000"
                 />
               </Field>
             </div>
@@ -201,12 +255,15 @@ export default function EmployeeModal({
                 <Input
                   value={department}
                   onChange={(e) => setDepartment(e.target.value)}
+                  placeholder="Engineering, HR..."
                 />
               </Field>
+
               <Field label="Designation *">
                 <Input
                   value={designation}
                   onChange={(e) => setDesignation(e.target.value)}
+                  placeholder="Software Engineer..."
                 />
               </Field>
             </div>
@@ -214,17 +271,20 @@ export default function EmployeeModal({
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <Field label="Role *">
                 <select
-                  className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white outline-none focus:border-[#7C3AED]/45 focus:ring-4 focus:ring-[#7C3AED]/15"
                   value={role}
                   onChange={(e) => setRole(e.target.value)}
+                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-zinc-100 outline-none backdrop-blur-xl transition focus:border-violet-500/40 focus:ring-4 focus:ring-violet-500/15"
                 >
-                  <option value="employee" className="text-black">
+                  <option
+                    value="employee"
+                    className="bg-zinc-900 text-zinc-100"
+                  >
                     Employee
                   </option>
-                  <option value="hr" className="text-black">
+                  <option value="hr" className="bg-zinc-900 text-zinc-100">
                     HR
                   </option>
-                  <option value="admin" className="text-black">
+                  <option value="admin" className="bg-zinc-900 text-zinc-100">
                     Admin
                   </option>
                 </select>
@@ -234,21 +294,23 @@ export default function EmployeeModal({
                 <Input
                   value={shift}
                   onChange={(e) => setShift(e.target.value)}
+                  placeholder="Morning, Evening..."
                 />
               </Field>
             </div>
 
             {isEdit && (
-              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-white/75">
-                <div>
-                  <span className="font-semibold text-white/90">
+              <div className="rounded-xl border border-white/10 bg-black/20 p-4 text-sm">
+                <div className="text-zinc-400">
+                  <span className="font-medium text-zinc-200">
                     Employee ID:
                   </span>{" "}
                   {editing?.employeeId}
                 </div>
+
                 {editing?.qrCode && (
-                  <div className="mt-1">
-                    <span className="font-semibold text-white/90">QR:</span>{" "}
+                  <div className="mt-1 text-zinc-400">
+                    <span className="font-medium text-zinc-200">QR:</span>{" "}
                     {editing.qrCode}
                   </div>
                 )}
@@ -257,10 +319,10 @@ export default function EmployeeModal({
           </div>
         </div>
 
-        <footer className="sticky bottom-0 flex items-center justify-between border-t border-white/10 bg-[#0B0616] p-4">
+        <footer className="flex items-center justify-between border-t border-white/10 bg-[#08040f] px-5 py-4">
           <button
             onClick={onClose}
-            className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white/85 hover:bg-white/10"
+            className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-zinc-200 transition hover:bg-white/10"
           >
             Cancel
           </button>
@@ -268,7 +330,7 @@ export default function EmployeeModal({
           <button
             onClick={submit}
             disabled={submitting || !canWrite}
-            className="rounded-2xl bg-gradient-to-r from-[#7C3AED] to-[#111827] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-500 to-fuchsia-500 px-4 py-2.5 text-sm font-medium text-white shadow-lg shadow-violet-500/20 transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {submitting ? "Saving..." : isEdit ? "Save Changes" : "Create"}
           </button>
@@ -287,8 +349,8 @@ function Field({
 }) {
   return (
     <label className="block">
-      <div className="text-xs font-semibold text-white/60">{label}</div>
-      <div className="mt-2">{children}</div>
+      <div className="text-xs font-medium text-zinc-400">{label}</div>
+      <div className="mt-1.5">{children}</div>
     </label>
   );
 }
@@ -298,9 +360,9 @@ function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
     <input
       {...props}
       className={cx(
-        "w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white",
-        "placeholder:text-white/40 outline-none",
-        "focus:border-[#7C3AED]/45 focus:ring-4 focus:ring-[#7C3AED]/15",
+        "w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-zinc-100",
+        "placeholder:text-zinc-600 outline-none backdrop-blur-xl",
+        "transition focus:border-violet-500/40 focus:ring-4 focus:ring-violet-500/15",
       )}
     />
   );

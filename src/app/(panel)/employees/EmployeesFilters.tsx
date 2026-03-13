@@ -5,82 +5,6 @@ import { Filter, Search } from "lucide-react";
 const cx = (...cls: Array<string | false | null | undefined>) =>
   cls.filter(Boolean).join(" ");
 
-function GlassCard({
-  className,
-  children,
-}: {
-  className?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div
-      className={cx(
-        "rounded-2xl border border-white/10 bg-white/[0.035] backdrop-blur-xl",
-        "shadow-[0_20px_80px_rgba(0,0,0,0.45)]",
-        className,
-      )}
-    >
-      {children}
-    </div>
-  );
-}
-
-function Input({
-  leftIcon,
-  className,
-  ...props
-}: React.InputHTMLAttributes<HTMLInputElement> & {
-  leftIcon?: React.ReactNode;
-}) {
-  return (
-    <div className="relative">
-      {leftIcon ? (
-        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/45">
-          {leftIcon}
-        </span>
-      ) : null}
-      <input
-        {...props}
-        className={cx(
-          "w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white",
-          "placeholder:text-white/40 outline-none",
-          "focus:border-[#7C3AED]/45 focus:ring-4 focus:ring-[#7C3AED]/15",
-          leftIcon ? "pl-10" : "",
-          className,
-        )}
-      />
-    </div>
-  );
-}
-
-function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
-  return (
-    <select
-      {...props}
-      className={cx(
-        "w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white",
-        "outline-none focus:border-[#7C3AED]/45 focus:ring-4 focus:ring-[#7C3AED]/15",
-        props.className,
-      )}
-    />
-  );
-}
-
-function PrimaryButton(props: React.ButtonHTMLAttributes<HTMLButtonElement>) {
-  return (
-    <button
-      {...props}
-      className={cx(
-        "inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold text-white",
-        "bg-gradient-to-r from-[#7C3AED] to-[#111827]",
-        "shadow-[0_14px_40px_rgba(124,58,237,0.20)]",
-        "hover:opacity-95 disabled:opacity-50 disabled:cursor-not-allowed",
-        props.className,
-      )}
-    />
-  );
-}
-
 export type Role = "admin" | "hr" | "employee" | string;
 
 export default function EmployeesFilters({
@@ -103,74 +27,87 @@ export default function EmployeesFilters({
   onApply: () => void;
 }) {
   return (
-    <GlassCard className="mt-6 p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <div className="flex items-center gap-2 text-sm font-semibold text-white/85">
-          <Filter className="h-4 w-4" />
-          Filters
+    <div className="mt-6 overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur-xl">
+      {/* Filter header */}
+      <div className="mb-4 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 bg-gradient-to-br from-violet-500/20 to-fuchsia-500/10">
+            <Filter className="h-3.5 w-3.5 text-zinc-300" />
+          </div>
+          <span className="text-sm font-medium text-zinc-200">Filters</span>
         </div>
 
         <button
           type="button"
           onClick={onReset}
-          className="rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/75 hover:bg-white/10"
+          className="rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-zinc-300 transition hover:bg-white/10"
         >
           Reset
         </button>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+        {/* Search */}
         <div className="lg:col-span-5">
-          <label className="text-xs font-semibold text-white/60">Search</label>
-          <div className="mt-2">
-            <Input
+          <label className="text-xs font-medium text-zinc-400">Search</label>
+          <div className="relative mt-1.5">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+            <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Name / Email / Employee ID"
-              leftIcon={<Search className="h-4 w-4" />}
+              className="w-full rounded-xl border border-white/10 bg-white/5 py-2.5 pl-9 pr-4 text-sm text-zinc-100 placeholder:text-zinc-600 outline-none backdrop-blur-xl transition focus:border-violet-500/40 focus:ring-4 focus:ring-violet-500/15"
             />
           </div>
         </div>
 
+        {/* Department */}
         <div className="lg:col-span-4">
-          <label className="text-xs font-semibold text-white/60">
+          <label className="text-xs font-medium text-zinc-400">
             Department
           </label>
-          <div className="mt-2">
-            <Input
-              value={department}
-              onChange={(e) => setDepartment(e.target.value)}
-              placeholder="HR, Engineering..."
-            />
-          </div>
+          <input
+            value={department}
+            onChange={(e) => setDepartment(e.target.value)}
+            placeholder="HR, Engineering..."
+            className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-600 outline-none backdrop-blur-xl transition focus:border-violet-500/40 focus:ring-4 focus:ring-violet-500/15"
+          />
         </div>
 
+        {/* Role */}
         <div className="lg:col-span-3">
-          <label className="text-xs font-semibold text-white/60">Role</label>
-          <div className="mt-2">
-            <Select value={role} onChange={(e) => setRole(e.target.value)}>
-              <option value="" className="text-black">
-                All
-              </option>
-              <option value="admin" className="text-black">
-                Admin
-              </option>
-              <option value="hr" className="text-black">
-                HR
-              </option>
-              <option value="employee" className="text-black">
-                Employee
-              </option>
-            </Select>
-          </div>
+          <label className="text-xs font-medium text-zinc-400">Role</label>
+          <select
+            value={role}
+            onChange={(e) => setRole(e.target.value)}
+            className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-zinc-100 outline-none backdrop-blur-xl transition focus:border-violet-500/40 focus:ring-4 focus:ring-violet-500/15"
+          >
+            <option value="" className="bg-zinc-900 text-zinc-100">
+              All
+            </option>
+            <option value="admin" className="bg-zinc-900 text-zinc-100">
+              Admin
+            </option>
+            <option value="hr" className="bg-zinc-900 text-zinc-100">
+              HR
+            </option>
+            <option value="employee" className="bg-zinc-900 text-zinc-100">
+              Employee
+            </option>
+          </select>
         </div>
 
+        {/* Apply */}
         <div className="lg:col-span-12 flex justify-end">
-          <PrimaryButton type="button" onClick={onApply}>
+          <button
+            type="button"
+            onClick={onApply}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-500 to-fuchsia-500 px-4 py-2.5 text-sm font-medium text-white shadow-lg shadow-violet-500/20 transition hover:opacity-95"
+          >
             Apply
-          </PrimaryButton>
+          </button>
         </div>
       </div>
-    </GlassCard>
+    </div>
   );
 }

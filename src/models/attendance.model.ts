@@ -12,6 +12,16 @@ export interface INetwork {
   ua?: string;
 }
 
+export interface ICheckInLocation {
+  latitude: number;
+  longitude: number;
+  accuracy?: number;
+  distanceFromOffice: number;
+  checkedAt: Date;
+  userAgent?: string;
+  ipAddress?: string;
+}
+
 export interface IAttendance extends Document {
   employeeId: string;
   date: Date;
@@ -25,6 +35,8 @@ export interface IAttendance extends Document {
   network?: INetwork;
   checkInIP?: string;
   checkOutIP?: string;
+  source?: "button" | "auto";
+  checkInLocation?: ICheckInLocation;
 }
 
 const breakSchema = new Schema<IBreak>({
@@ -32,6 +44,19 @@ const breakSchema = new Schema<IBreak>({
   breakOut: { type: Date },
   duration: { type: Number, default: 0 },
 });
+
+const checkInLocationSchema = new Schema<ICheckInLocation>(
+  {
+    latitude: { type: Number, required: true },
+    longitude: { type: Number, required: true },
+    accuracy: { type: Number },
+    distanceFromOffice: { type: Number, required: true },
+    checkedAt: { type: Date, required: true },
+    userAgent: { type: String },
+    ipAddress: { type: String },
+  },
+  { _id: false },
+);
 
 const attendanceSchema = new Schema<IAttendance>(
   {
@@ -76,6 +101,12 @@ const attendanceSchema = new Schema<IAttendance>(
     checkOutIP: {
       type: String,
     },
+    source: {
+      type: String,
+      enum: ["button", "auto"],
+      default: "button",
+    },
+    checkInLocation: checkInLocationSchema,
   },
   {
     timestamps: true,

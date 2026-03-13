@@ -109,13 +109,21 @@ export default function Sidebar({
       >
         <div className="flex items-center justify-between px-4 pt-5">
           <div className="flex items-center gap-3">
-            <span className="w-12 h-10 rounded-[8px] bg-gradient-to-br from-[#7C3AED] to-[#1f283e]">
+            <span
+              className="
+  flex h-11 w-11 items-center justify-center
+  rounded-xl p-1
+  bg-gradient-to-br from-[#1A0B2E] to-[#0B0616]
+  border border-[#7C3AED]/30
+  shadow-[0_0_18px_rgba(124,58,237,0.35)]
+  "
+            >
               <Image
                 src="/assets/images/Webcrest.png"
-                alt=""
-                width={100}
-                height={100}
-                className="mt-2 ml-1 w-10 h-auto"
+                alt="WebCrest"
+                width={48}
+                height={48}
+                className="h-7 w-auto object-contain"
               />
             </span>
             {!collapsed && (

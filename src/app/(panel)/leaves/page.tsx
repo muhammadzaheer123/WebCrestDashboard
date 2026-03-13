@@ -1,7 +1,7 @@
 import { requireRole } from "@/lib/server/roleGuard";
-import React from "react";
+import LeavesManagementClient from "./LeavesManagementClient";
 
-export default async function page() {
-  const authUser = await requireRole(["admin", "hr"]);
-  return <div>page</div>;
+export default async function LeavesPage() {
+  await requireRole(["admin", "hr"]);
+  return <LeavesManagementClient />;
 }

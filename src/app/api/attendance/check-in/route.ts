@@ -52,13 +52,7 @@ export async function POST(req: Request) {
         { status: 401 },
       );
     }
-
-    if (!mongoose.Types.ObjectId.isValid(empId)) {
-      return NextResponse.json(
-        { success: false, message: "Invalid employee id in token" },
-        { status: 400 },
-      );
-    }
+    const employeeId = String(empId);
 
     const employeeObjectId = new mongoose.Types.ObjectId(empId);
 
@@ -68,7 +62,7 @@ export async function POST(req: Request) {
     const now = new Date();
 
     const doc = await Attendance.findOne({
-      employeeId: employeeObjectId,
+      employeeId: employeeId,
       date: today,
     });
 
@@ -92,7 +86,7 @@ export async function POST(req: Request) {
 
     if (!doc) {
       const created = await Attendance.create({
-        employeeId: employeeObjectId,
+        employeeId: employeeId,
         date: today,
         checkIn: now,
         source: "button",

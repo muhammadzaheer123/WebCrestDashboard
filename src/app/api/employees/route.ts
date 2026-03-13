@@ -20,18 +20,25 @@ export async function POST(request: NextRequest) {
       "department",
       "designation",
       "shift",
+      "salary",
     ];
-    const missingFields = requiredFields.filter((field) => !body[field]);
+
+    const missingFields = requiredFields.filter(
+      (field) =>
+        body[field] === undefined || body[field] === null || body[field] === "",
+    );
 
     if (missingFields.length > 0) {
       return NextResponse.json(
         {
+          success: false,
           error: "Missing required fields",
           missingFields,
         },
         { status: 400 },
       );
     }
+
     const {
       name,
       email,
@@ -40,12 +47,28 @@ export async function POST(request: NextRequest) {
       designation,
       role = "employee",
       shift,
+      salary,
       password,
     } = body;
 
     if (!password) {
       return NextResponse.json(
-        { error: "Password is required" },
+        {
+          success: false,
+          error: "Password is required",
+        },
+        { status: 400 },
+      );
+    }
+
+    const parsedSalary = Number(salary);
+
+    if (Number.isNaN(parsedSalary) || parsedSalary < 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Salary must be a valid number greater than or equal to 0",
+        },
         { status: 400 },
       );
     }
@@ -53,8 +76,11 @@ export async function POST(request: NextRequest) {
     const existingEmployee = await Employee.findOne({ email });
     if (existingEmployee) {
       return NextResponse.json(
-        { error: "Employee with this email already exists" },
-        { status: 409 }, // 409 Conflict
+        {
+          success: false,
+          error: "Employee with this email already exists",
+        },
+        { status: 409 },
       );
     }
 
@@ -69,6 +95,7 @@ export async function POST(request: NextRequest) {
       designation,
       role,
       shift,
+      salary: parsedSalary,
       password,
       qrCode,
     });
@@ -85,6 +112,7 @@ export async function POST(request: NextRequest) {
       designation: employee.designation,
       role: employee.role,
       shift: employee.shift,
+      salary: employee.salary,
       qrCode: employee.qrCode,
       isActive: employee.isActive,
       joiningDate: employee.joiningDate,
@@ -103,6 +131,7 @@ export async function POST(request: NextRequest) {
 
     if (error.name === "ValidationError") {
       const errors = Object.values(error.errors).map((err: any) => err.message);
+
       return NextResponse.json(
         {
           success: false,
@@ -139,21 +168,24 @@ export async function GET(request: NextRequest) {
     await connectDB();
 
     const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get("page") || "1");
-    const limit = parseInt(searchParams.get("limit") || "10");
+    const page = parseInt(searchParams.get("page") || "1", 10);
+    const limit = parseInt(searchParams.get("limit") || "10", 10);
     const department = searchParams.get("department");
     const role = searchParams.get("role");
     const search = searchParams.get("search");
 
-    const filter: any = { isActive: true };
+    const filter: Record<string, any> = { isActive: true };
 
     if (department) filter.department = department;
     if (role) filter.role = role;
+
     if (search) {
       filter.$or = [
         { name: { $regex: search, $options: "i" } },
         { email: { $regex: search, $options: "i" } },
         { employeeId: { $regex: search, $options: "i" } },
+        { designation: { $regex: search, $options: "i" } },
+        { department: { $regex: search, $options: "i" } },
       ];
     }
 
@@ -190,65 +222,6 @@ export async function GET(request: NextRequest) {
       {
         success: false,
         error: "Failed to fetch employees",
-      },
-      { status: 500 },
-    );
-  }
-}
-
-// DELETE api
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  try {
-    await connectDB();
-
-    const { id } = await params;
-
-    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Invalid employee ID format",
-        },
-        { status: 400 },
-      );
-    }
-
-    const employee = await Employee.findByIdAndUpdate(
-      id,
-      { isActive: false },
-      { new: true, runValidators: true },
-    ).select("-password -__v");
-
-    if (!employee) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Employee not found",
-        },
-        { status: 404 },
-      );
-    }
-
-    return NextResponse.json({
-      success: true,
-      message: "Employee deleted successfully",
-      data: {
-        id: employee._id,
-        name: employee.name,
-        email: employee.email,
-        isActive: employee.isActive,
-      },
-    });
-  } catch (error: any) {
-    console.error("Error deleting employee:", error);
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Failed to delete employee",
       },
       { status: 500 },
     );

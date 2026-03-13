@@ -1,7 +1,7 @@
-import mongoose, { Schema, Document, Model } from "mongoose";
+import mongoose, { Schema, Model, HydratedDocument } from "mongoose";
 import bcrypt from "bcryptjs";
 
-export interface IEmployee extends Document {
+export interface IEmployee {
   employeeId: string;
   name: string;
   email: string;
@@ -10,13 +10,18 @@ export interface IEmployee extends Document {
   designation: string;
   role: "admin" | "hr" | "employee";
   shift: string;
+  salary: number;
   password: string;
   qrCode: string;
   isActive: boolean;
   joiningDate: Date;
   resetOtp?: string;
   resetOtpExpire?: number;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
+
+export type EmployeeDocument = HydratedDocument<IEmployee>;
 
 const employeeSchema = new Schema<IEmployee>(
   {
@@ -38,6 +43,7 @@ const employeeSchema = new Schema<IEmployee>(
       default: "employee",
     },
     shift: { type: String, required: true },
+    salary: { type: Number, required: true, min: 0 },
     password: { type: String, required: true, select: false },
     qrCode: { type: String, required: true },
     isActive: { type: Boolean, default: true },
@@ -49,13 +55,16 @@ const employeeSchema = new Schema<IEmployee>(
 );
 
 employeeSchema.pre("save", async function (next) {
-  if (!this.isModified("password")) return next();
-  this.password = await bcrypt.hash(this.password, 12);
+  const doc = this as EmployeeDocument;
+
+  if (!doc.isModified("password")) return next();
+
+  doc.password = await bcrypt.hash(doc.password, 12);
   next();
 });
 
 const Employee: Model<IEmployee> =
-  (mongoose.models.Employee as Model<IEmployee>) ||
+  mongoose.models.Employee ||
   mongoose.model<IEmployee>("Employee", employeeSchema);
 
 export default Employee;

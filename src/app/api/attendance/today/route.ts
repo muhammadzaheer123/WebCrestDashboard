@@ -32,12 +32,10 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const employeeObjectId = new mongoose.Types.ObjectId(employeeId);
-
-    const today = ymd(); // "2026-03-05"
+    const today = ymd();
 
     const attendance = await Attendance.findOne({
-      employeeId: employeeObjectId,
+      employeeId: String(employeeId),
       date: today,
     });
 
