@@ -2,7 +2,7 @@ import mongoose, { Schema, InferSchemaType, models } from "mongoose";
 
 const LeaveRequestSchema = new Schema(
   {
-    userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    userId: { type: Schema.Types.ObjectId, ref: "Employee", required: true },
     type: {
       type: String,
       enum: ["annual", "sick", "casual", "unpaid", "other"],
@@ -17,8 +17,8 @@ const LeaveRequestSchema = new Schema(
       type: String,
       enum: ["pending", "approved", "rejected", "cancelled"],
       default: "pending",
-    },  
-    approverId: { type: Schema.Types.ObjectId, ref: "User" },
+    },
+    approverId: { type: Schema.Types.ObjectId, ref: "Employee" },
     daysRequested: { type: Number, required: true },
     balanceSnapshot: {
       annual: Number,
@@ -26,9 +26,10 @@ const LeaveRequestSchema = new Schema(
       casual: Number,
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 export type LeaveRequestDoc = InferSchemaType<typeof LeaveRequestSchema>;
-export default models.LeaveRequest ||
-  mongoose.model("LeaveRequest", LeaveRequestSchema);
+
+export default (models.LeaveRequest as mongoose.Model<LeaveRequestDoc>) ||
+  mongoose.model<LeaveRequestDoc>("LeaveRequest", LeaveRequestSchema);

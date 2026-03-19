@@ -3,7 +3,6 @@ import { cookies } from "next/headers";
 import jwt from "jsonwebtoken";
 import Attendance from "@/models/attendance.model";
 import { connectDB } from "@/lib/db";
-import { ymd } from "@/lib/dates";
 import { haversineDistanceMeters } from "@/lib/location";
 
 export const runtime = "nodejs";
@@ -31,6 +30,16 @@ function getClientIp(headers: Headers): string {
   }
 
   return headers.get("x-real-ip") || "";
+}
+
+function getDayRange(date = new Date()) {
+  const start = new Date(date);
+  start.setHours(0, 0, 0, 0);
+
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+
+  return { start, end };
 }
 
 export async function POST(req: Request) {
@@ -124,14 +133,15 @@ export async function POST(req: Request) {
 
     await connectDB();
 
-    const today = ymd();
     const now = new Date();
+    const { start, end } = getDayRange(now);
+
     const ipAddress = getClientIp(req.headers);
     const userAgent = req.headers.get("user-agent") || "";
 
     const existing = await Attendance.findOne({
       employeeId: empId,
-      date: today,
+      date: { $gte: start, $lt: end },
     });
 
     if (existing?.checkIn && !existing.checkOut) {
@@ -158,7 +168,7 @@ export async function POST(req: Request) {
     if (!existing) {
       const created = await Attendance.create({
         employeeId: empId,
-        date: today,
+        date: start,
         checkIn: now,
         status: "present",
         source: "auto",
@@ -168,6 +178,10 @@ export async function POST(req: Request) {
           ua: userAgent,
         },
         checkInLocation: locationMeta,
+        breaks: [],
+        totalBreakTime: 0,
+        totalWorkHours: 0,
+        totalHours: 0,
       });
 
       return NextResponse.json({
@@ -189,6 +203,7 @@ export async function POST(req: Request) {
       ua: userAgent,
     };
     existing.checkInLocation = locationMeta;
+    existing.date = start;
 
     await existing.save();
 

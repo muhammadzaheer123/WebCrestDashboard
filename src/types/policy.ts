@@ -24,11 +24,17 @@ export type PolicyState = {
   workdayStart: string;
   workdayEnd: string;
   graceMinutes: number;
-
   lateAfterMinutes: number;
   halfDayAfterMinutes: number;
   absentAfterMinutes: number;
-
+  fullDayMinutes: number;
+  halfDayMinutes: number;
+  enableLatePenalty: boolean;
+  lateToLeaveThreshold: number;
+  salaryCalculationMode: "per-day" | "per-hour";
+  overtimeEnabled: boolean;
+  overtimeMultiplier: number;
+  weekends: number[];
   leaveTypes: LeaveType[];
   holidays: Holiday[];
   shifts: ShiftTemplate[];

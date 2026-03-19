@@ -8,6 +8,7 @@ import {
   Settings,
   Notebook,
   Calendar,
+  Banknote,
 } from "lucide-react";
 
 import Sidebar, { NavItem } from "./Sidebar";
@@ -60,6 +61,12 @@ export default function AdminShell({
           icon: Calendar,
           path: "/my-leaves",
         },
+        {
+          id: "payroll",
+          label: "My Payroll",
+          icon: Banknote,
+          path: "/payroll",
+        },
       ];
     }
 
@@ -93,6 +100,12 @@ export default function AdminShell({
         label: "Leave Management",
         icon: Calendar,
         path: "/leaves",
+      },
+      {
+        id: "payroll",
+        label: "Payroll",
+        icon: Banknote,
+        path: "/payroll",
       },
       {
         id: "settings",
@@ -136,6 +149,10 @@ export default function AdminShell({
       "/employee-adjustments": {
         title: "Company Policies",
         subtitle: "View company HR adjustments and policies.",
+      },
+      "/payroll": {
+        title: "Payroll",
+        subtitle: "View and manage salary calculations and breakdowns.",
       },
     }),
     [],

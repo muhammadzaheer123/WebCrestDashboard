@@ -1,10 +1,8 @@
 import { NextResponse } from "next/server";
-import { ymd } from "@/lib/dates";
 import Attendance from "@/models/attendance.model";
 import type { IBreak } from "@/models/attendance.model";
 import { connectDB } from "@/lib/db";
 import jwt from "jsonwebtoken";
-import mongoose from "mongoose";
 import { ensureOfficeGate } from "@/lib/ip";
 import { cookies } from "next/headers";
 
@@ -33,6 +31,16 @@ async function getEmployeeId(): Promise<string | null> {
   }
 }
 
+function getDayRange(date = new Date()) {
+  const start = new Date(date);
+  start.setHours(0, 0, 0, 0);
+
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+
+  return { start, end };
+}
+
 export async function POST(req: Request) {
   try {
     const gate = ensureOfficeGate(req.headers);
@@ -49,77 +57,76 @@ export async function POST(req: Request) {
     }
 
     const empId = await getEmployeeId();
-    if (!empId)
+    if (!empId) {
       return NextResponse.json(
         { success: false, message: "Unauthenticated" },
         { status: 401 },
       );
-
-    if (!mongoose.Types.ObjectId.isValid(empId)) {
-      return NextResponse.json(
-        { success: false, message: "Invalid employee id in token" },
-        { status: 400 },
-      );
     }
-    const employeeObjectId = new mongoose.Types.ObjectId(empId);
 
     await connectDB();
 
-    const today = ymd();
     const now = new Date();
+    const { start, end } = getDayRange(now);
 
     const open = await Attendance.findOne({
-      employeeId: employeeObjectId,
+      employeeId: empId,
+      date: { $gte: start, $lt: end },
       checkIn: { $exists: true },
       $or: [{ checkOut: { $exists: false } }, { checkOut: null }],
-    })
-      .sort({ checkIn: -1 })
-      .lean(false);
+    }).sort({ checkIn: -1 });
 
     if (!open) {
       return NextResponse.json(
         {
           success: false,
           message: "No open check-in found",
-          date: today,
+          date: start,
           employeeId: empId,
         },
         { status: 409 },
       );
     }
 
-    // set checkout time
     open.checkOut = now;
 
-    // calculate total break time
-    let totalBreak = 0;
+    let totalBreakMinutes = 0;
 
     if (open.breaks && open.breaks.length > 0) {
       open.breaks.forEach((b: IBreak) => {
         if (b.breakIn && b.breakOut) {
-          totalBreak +=
-            new Date(b.breakOut).getTime() - new Date(b.breakIn).getTime();
+          const minutes = Math.round(
+            (new Date(b.breakOut).getTime() - new Date(b.breakIn).getTime()) /
+              60000,
+          );
+          b.duration = minutes;
+          totalBreakMinutes += minutes;
         }
       });
     }
 
-    // total work duration
-    const totalDuration =
-      new Date(now).getTime() - new Date(open.checkIn).getTime() - totalBreak;
+    const grossMinutes = Math.max(
+      0,
+      Math.round((now.getTime() - new Date(open.checkIn).getTime()) / 60000),
+    );
 
-    // convert to hours
-    const totalWorkHours = totalDuration / (1000 * 60 * 60);
+    const totalWorkMinutes = Math.max(0, grossMinutes - totalBreakMinutes);
+    const totalWorkHours = Number((totalWorkMinutes / 60).toFixed(2));
 
-    // save calculations
-    open.totalBreakTime = totalBreak;
-    open.totalWorkHours = Number(totalWorkHours.toFixed(2));
-
-    // save network info
+    open.totalBreakTime = totalBreakMinutes;
+    open.totalHours = Number((grossMinutes / 60).toFixed(2));
+    open.totalWorkHours = totalWorkHours;
+    open.checkOutIP = gate.ip;
     open.network = {
+      ...(open.network || {}),
       ip: gate.ip,
       ssid: gate.ssid,
       ua: req.headers.get("user-agent") || "",
     };
+
+    if (open.status === "on-break") {
+      open.status = "present";
+    }
 
     await open.save();
 
@@ -127,11 +134,13 @@ export async function POST(req: Request) {
       {
         success: true,
         message: "Checked-out",
-        date: open.date ?? today,
+        date: open.date,
         recordId: open._id,
         employeeId: empId,
+        totalHours: open.totalHours,
+        totalBreakMinutes: open.totalBreakTime,
         totalWorkHours: open.totalWorkHours,
-        totalBreakTime: open.totalBreakTime,
+        totalWorkMinutes,
       },
       { status: 200 },
     );

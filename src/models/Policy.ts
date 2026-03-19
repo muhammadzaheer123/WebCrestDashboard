@@ -33,16 +33,50 @@ const ShiftSchema = new Schema(
 
 const PolicySchema = new Schema(
   {
-    // if you have multi-company later, add orgId/companyId here
     key: { type: String, required: true, unique: true, default: "default" },
 
     workdayStart: { type: String, required: true, default: "09:00" },
     workdayEnd: { type: String, required: true, default: "18:00" },
-    graceMinutes: { type: Number, required: true, default: 10 },
+    graceMinutes: { type: Number, required: true, default: 20 },
 
-    lateAfterMinutes: { type: Number, required: true, default: 10 },
+    lateAfterMinutes: { type: Number, required: true, default: 20 },
     halfDayAfterMinutes: { type: Number, required: true, default: 120 },
     absentAfterMinutes: { type: Number, required: true, default: 240 },
+
+    fullDayMinutes: { type: Number, required: true, default: 480 },
+    halfDayMinutes: { type: Number, required: true, default: 240 },
+
+    salaryCalculationMode: {
+      type: String,
+      enum: ["per-day", "per-hour"],
+      required: true,
+      default: "per-day",
+    },
+    overtimeEnabled: { type: Boolean, required: true, default: false },
+    overtimeMultiplier: { type: Number, required: true, default: 1.5, min: 1 },
+
+    partTimeMode: {
+      type: String,
+      enum: ["monthly-deduction"],
+      required: true,
+      default: "monthly-deduction",
+    },
+
+    enableLatePenalty: { type: Boolean, required: true, default: true },
+    lateToLeaveThreshold: { type: Number, required: true, default: 3, min: 1 },
+
+    missingCheckoutAction: {
+      type: String,
+      enum: ["auto-close"],
+      required: true,
+      default: "auto-close",
+    },
+
+    weekends: {
+      type: [Number], // JS weekday indexes: 0=Sun ... 6=Sat
+      required: true,
+      default: [0],
+    },
 
     leaveTypes: { type: [LeaveTypeSchema], required: true, default: [] },
     holidays: { type: [HolidaySchema], required: true, default: [] },

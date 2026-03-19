@@ -9,7 +9,6 @@ export async function GET() {
 
   const doc = await Policy.findOne({ key: POLICY_KEY }).lean();
   if (!doc) {
-    // create first-time default doc if missing
     const created = await Policy.create({ key: POLICY_KEY });
     return NextResponse.json(created);
   }
@@ -22,7 +21,6 @@ export async function PUT(req: Request) {
 
   const body = await req.json();
 
-  // Minimal safety: only pick allowed fields (prevents injecting weird data)
   const payload = {
     workdayStart: body.workdayStart,
     workdayEnd: body.workdayEnd,
@@ -32,14 +30,38 @@ export async function PUT(req: Request) {
     halfDayAfterMinutes: body.halfDayAfterMinutes,
     absentAfterMinutes: body.absentAfterMinutes,
 
+    fullDayMinutes: body.fullDayMinutes,
+    halfDayMinutes: body.halfDayMinutes,
+
+    salaryCalculationMode: body.salaryCalculationMode,
+    overtimeEnabled:
+      typeof body.overtimeEnabled === "boolean"
+        ? body.overtimeEnabled
+        : undefined,
+    overtimeMultiplier:
+      typeof body.overtimeMultiplier === "number"
+        ? body.overtimeMultiplier
+        : undefined,
+    partTimeMode: body.partTimeMode,
+
+    enableLatePenalty: body.enableLatePenalty,
+    lateToLeaveThreshold: body.lateToLeaveThreshold,
+
+    missingCheckoutAction: body.missingCheckoutAction,
+    weekends: Array.isArray(body.weekends) ? body.weekends : undefined,
+
     leaveTypes: Array.isArray(body.leaveTypes) ? body.leaveTypes : [],
     holidays: Array.isArray(body.holidays) ? body.holidays : [],
     shifts: Array.isArray(body.shifts) ? body.shifts : [],
   };
 
+  const cleanedPayload = Object.fromEntries(
+    Object.entries(payload).filter(([, value]) => value !== undefined),
+  );
+
   const updated = await Policy.findOneAndUpdate(
     { key: POLICY_KEY },
-    { $set: payload },
+    { $set: cleanedPayload },
     { new: true, upsert: true },
   ).lean();
 

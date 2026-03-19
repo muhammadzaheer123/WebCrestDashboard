@@ -1,11 +1,7 @@
-// app/api/attendance/check-in/route.ts
-
 import { NextResponse } from "next/server";
-import { ymd } from "@/lib/dates";
 import Attendance from "@/models/attendance.model";
 import { connectDB } from "@/lib/db";
 import jwt from "jsonwebtoken";
-import mongoose from "mongoose";
 import { ensureOfficeGate } from "@/lib/ip";
 import { cookies } from "next/headers";
 
@@ -28,6 +24,16 @@ async function getEmployeeId(): Promise<string | null> {
   }
 }
 
+function getDayRange(date = new Date()) {
+  const start = new Date(date);
+  start.setHours(0, 0, 0, 0);
+
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+
+  return { start, end };
+}
+
 export async function POST(req: Request) {
   try {
     const gate = ensureOfficeGate(req.headers);
@@ -43,7 +49,6 @@ export async function POST(req: Request) {
       );
     }
 
-    // ✅ FIX
     const empId = await getEmployeeId();
 
     if (!empId) {
@@ -52,18 +57,15 @@ export async function POST(req: Request) {
         { status: 401 },
       );
     }
-    const employeeId = String(empId);
-
-    const employeeObjectId = new mongoose.Types.ObjectId(empId);
 
     await connectDB();
 
-    const today = ymd();
     const now = new Date();
+    const { start, end } = getDayRange(now);
 
     const doc = await Attendance.findOne({
-      employeeId: employeeId,
-      date: today,
+      employeeId: empId,
+      date: { $gte: start, $lt: end },
     });
 
     if (doc?.checkIn && !doc.checkOut) {
@@ -71,7 +73,7 @@ export async function POST(req: Request) {
         {
           success: false,
           message: "Already checked-in",
-          date: today,
+          date: start,
           employeeId: empId,
         },
         { status: 409 },
@@ -86,18 +88,24 @@ export async function POST(req: Request) {
 
     if (!doc) {
       const created = await Attendance.create({
-        employeeId: employeeId,
-        date: today,
+        employeeId: empId,
+        date: start,
         checkIn: now,
+        status: "present",
         source: "button",
         network: networkMeta,
+        checkInIP: gate.ip,
+        breaks: [],
+        totalBreakTime: 0,
+        totalWorkHours: 0,
+        totalHours: 0,
       });
 
       return NextResponse.json(
         {
           success: true,
           message: "Checked-in",
-          date: today,
+          date: start,
           recordId: created._id,
           employeeId: empId,
         },
@@ -107,7 +115,11 @@ export async function POST(req: Request) {
 
     doc.checkIn = now;
     doc.checkOut = undefined;
-    // doc.network = networkMeta;
+    doc.status = "present";
+    doc.source = "button";
+    doc.network = networkMeta;
+    doc.checkInIP = gate.ip;
+    doc.date = start;
 
     await doc.save();
 
@@ -115,7 +127,7 @@ export async function POST(req: Request) {
       {
         success: true,
         message: "Checked-in",
-        date: today,
+        date: start,
         recordId: doc._id,
         employeeId: empId,
       },

@@ -5,6 +5,16 @@ import { getUserFromToken } from "@/lib/middlewares/auth";
 
 const AttendanceModel = Attendance;
 
+function getDayRange(date = new Date()) {
+  const start = new Date(date);
+  start.setHours(0, 0, 0, 0);
+
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+
+  return { start, end };
+}
+
 export async function POST() {
   try {
     await connectDB();
@@ -18,14 +28,13 @@ export async function POST() {
       );
     }
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const { start, end } = getDayRange();
 
     const attendance = await AttendanceModel.findOne({
-      employeeId: user.id,
+      employeeId: String(user.id),
       date: {
-        $gte: today,
-        $lt: new Date(today.getTime() + 86400000),
+        $gte: start,
+        $lt: end,
       },
     });
 
@@ -56,7 +65,10 @@ export async function POST() {
 
     attendance.breaks.push({
       breakIn: new Date(),
+      duration: 0,
     });
+
+    attendance.status = "on-break";
 
     await attendance.save();
 
