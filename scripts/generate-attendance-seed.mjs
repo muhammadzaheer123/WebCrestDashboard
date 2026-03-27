@@ -388,6 +388,3 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const outPath = path.join(__dirname, "attendance-seed.json");
 writeFileSync(outPath, JSON.stringify(records, null, 2), "utf-8");
 console.log(`\n✅  Written to: ${outPath}`);
-console.log(
-  `\nmongoimport command:\n  mongoimport --uri "mongodb+srv://webcrest:3cyRXHz7jT7rR83j@cluster0.4ktie13.mongodb.net/" --db Webcrest_HR_skills --collection attendances --jsonArray --file scripts/attendance-seed.json\n`,
-);
