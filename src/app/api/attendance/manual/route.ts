@@ -1,9 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "../../../../lib/db";
 import Attendance from "../../../../models/attendance.model";
+import { getAuthUser } from "@/lib/server/auth";
+
+export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
   try {
+    const user = await getAuthUser();
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: "Unauthenticated" },
+        { status: 401 },
+      );
+    }
+    if (!["admin", "hr"].includes(user.role)) {
+      return NextResponse.json(
+        { success: false, error: "Forbidden" },
+        { status: 403 },
+      );
+    }
+
     await connectDB();
 
     const body = await request.json();

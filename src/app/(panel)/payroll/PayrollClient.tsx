@@ -98,6 +98,21 @@ function monthName(month: number) {
   });
 }
 
+/** Returns a label like "Mar 10 – Apr 9, 2026" for the 10th-to-10th payroll period */
+function payrollPeriodLabel(month: number, year: number) {
+  const startDate = new Date(year, month - 1, 10);
+  const nextMonth = month === 12 ? 1 : month + 1;
+  const nextYear = month === 12 ? year + 1 : year;
+  const endDate = new Date(nextYear, nextMonth - 1, 9);
+  const fmt = (d: Date) =>
+    d.toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  return `${fmt(startDate)} – ${fmt(endDate)}`;
+}
+
 function formatMoney(value: number) {
   if (!Number.isFinite(value)) return "—";
   return new Intl.NumberFormat("en-US", {
@@ -398,7 +413,7 @@ export default function PayrollClient() {
           : "Draft"
         : "—",
       helper: payroll
-        ? `${monthName(payroll.month)} ${payroll.year}`
+        ? payrollPeriodLabel(payroll.month, payroll.year)
         : "Monthly payroll state",
       icon: ShieldCheck,
     },
@@ -445,9 +460,7 @@ export default function PayrollClient() {
           <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
             <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-zinc-300 backdrop-blur-xl">
               <Calculator className="h-4 w-4 text-zinc-400" />
-              <span>
-                {monthName(month)} {year}
-              </span>
+              <span>{payrollPeriodLabel(month, year)}</span>
             </div>
 
             <button
@@ -666,13 +679,12 @@ export default function PayrollClient() {
                     label="Hours Worked"
                     value={`${round2Hours(payroll.totalWorkedHours)}h`}
                   />
-                  {payroll.salaryMode === "per-hour" &&
-                    payroll.totalOvertimeHours > 0 && (
-                      <MiniStat
-                        label="Overtime"
-                        value={`${round2Hours(payroll.totalOvertimeHours)}h`}
-                      />
-                    )}
+                  {payroll.totalOvertimeHours > 0 && (
+                    <MiniStat
+                      label="Overtime"
+                      value={`${round2Hours(payroll.totalOvertimeHours)}h`}
+                    />
+                  )}
                 </div>
               </div>
 
@@ -717,8 +729,7 @@ export default function PayrollClient() {
                     `Deduction Days: ${formatFraction(payroll.deductionDays)}`,
                     `Deduction Amount: ${formatMoney(payroll.deductionAmount)}`,
                     `Weekends (paid by company): ${payroll.weekendDays} • Holidays (paid): ${payroll.holidayDays}`,
-                    ...(payroll.salaryMode === "per-hour" &&
-                    payroll.overtimeAmount > 0
+                    ...(payroll.overtimeAmount > 0
                       ? [
                           `Overtime: ${round2Hours(payroll.totalOvertimeHours)}h → +${formatMoney(payroll.overtimeAmount)}`,
                         ]
@@ -735,8 +746,8 @@ export default function PayrollClient() {
                     Daily Breakdown
                   </h2>
                   <p className="mt-1 text-xs text-zinc-400">
-                    Detailed daily payroll evaluation for{" "}
-                    {monthName(payroll.month)} {payroll.year}
+                    Daily payroll evaluation for{" "}
+                    {payrollPeriodLabel(payroll.month, payroll.year)}
                   </p>
                 </div>
 
@@ -759,7 +770,7 @@ export default function PayrollClient() {
                         <th className="px-5 py-3 font-medium">Worked</th>
                         <th className="px-5 py-3 font-medium">Break</th>
                         <th className="px-5 py-3 font-medium">Late</th>
-                        {payroll.salaryMode === "per-hour" && (
+                        {payroll.totalOvertimeHours > 0 && (
                           <th className="px-5 py-3 font-medium">Overtime</th>
                         )}
                         <th className="px-5 py-3 font-medium">Payable</th>
@@ -836,7 +847,7 @@ export default function PayrollClient() {
                                 : "—"}
                             </td>
 
-                            {payroll.salaryMode === "per-hour" && (
+                            {payroll.totalOvertimeHours > 0 && (
                               <td className="whitespace-nowrap px-5 py-3.5">
                                 {row.overtimeMinutes > 0 ? (
                                   <span className="text-xs font-medium text-emerald-300">
@@ -910,7 +921,7 @@ export default function PayrollClient() {
                 <div className="flex items-center justify-between border-t border-white/10 px-5 py-3 text-xs text-zinc-400">
                   <span>
                     {payroll.breakdown.length} day record(s) •{" "}
-                    {monthName(payroll.month)} {payroll.year}
+                    {payrollPeriodLabel(payroll.month, payroll.year)}
                   </span>
                   <div className="flex items-center gap-2">
                     <span className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-zinc-300">

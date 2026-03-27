@@ -16,6 +16,8 @@ export interface ILeave extends Document {
   hrComment: string;
   decidedBy?: Types.ObjectId;
   decidedAt?: Date;
+  isHalfDay?: boolean;
+  halfDayPart?: "AM" | "PM" | null;
 }
 
 const LeaveSchema = new Schema<ILeave>(
@@ -48,6 +50,8 @@ const LeaveSchema = new Schema<ILeave>(
     hrComment: { type: String, default: "" },
     decidedBy: { type: Schema.Types.ObjectId, ref: "User" },
     decidedAt: { type: Date },
+    isHalfDay: { type: Boolean, default: false },
+    halfDayPart: { type: String, enum: ["AM", "PM", null], default: null },
   },
   { timestamps: true },
 );

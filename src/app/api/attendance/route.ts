@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "../../../lib/db";
 import Attendance from "../../../models/attendance.model";
-import mongoose from "mongoose";
 
 export async function GET(request: NextRequest) {
   try {
@@ -18,8 +17,8 @@ export async function GET(request: NextRequest) {
 
     const filter: any = {};
 
-    if (employeeId && mongoose.Types.ObjectId.isValid(employeeId)) {
-      filter.employeeId = new mongoose.Types.ObjectId(employeeId);
+    if (employeeId) {
+      filter.employeeId = String(employeeId);
     }
 
     if (status) filter.status = status;

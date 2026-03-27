@@ -1,6 +1,7 @@
-﻿import Attendance from "@/models/attendance.model";
+﻿import mongoose from "mongoose";
+import Attendance from "@/models/attendance.model";
 import Employee from "@/models/Employee";
-import LeaveRequest from "@/models/leaveRequest.model";
+import Leave from "@/models/Leave";
 import { Policy, type PolicyDoc } from "@/models/Policy";
 
 type EmployeeLike = {
@@ -85,15 +86,22 @@ function toYmd(date: Date) {
 }
 
 function monthRange(year: number, month: number) {
-  const start = new Date(year, month - 1, 1, 0, 0, 0, 0);
-  const end = new Date(year, month, 1, 0, 0, 0, 0);
+  // Payroll period: 10th of the given month to 10th of the next month (exclusive)
+  const start = new Date(year, month - 1, 10, 0, 0, 0, 0);
+  const nextMonth = month === 12 ? 1 : month + 1;
+  const nextYear = month === 12 ? year + 1 : year;
+  const end = new Date(nextYear, nextMonth - 1, 10, 0, 0, 0, 0);
   return { start, end };
 }
 
-function eachDayOfMonth(year: number, month: number) {
+// Generates every day in the payroll period: 10th of `month` through 9th of next month
+function eachDayOfPayrollPeriod(year: number, month: number) {
   const days: Date[] = [];
-  const current = new Date(year, month - 1, 1);
-  while (current.getMonth() === month - 1) {
+  const nextMonth = month === 12 ? 1 : month + 1;
+  const nextYear = month === 12 ? year + 1 : year;
+  const end = new Date(nextYear, nextMonth - 1, 10, 0, 0, 0, 0);
+  const current = new Date(year, month - 1, 10, 0, 0, 0, 0);
+  while (current < end) {
     days.push(new Date(current));
     current.setDate(current.getDate() + 1);
   }
@@ -228,8 +236,8 @@ export async function calculateEmployeePayroll(params: {
       employeeId,
       date: { $gte: start, $lt: end },
     }).lean(),
-    LeaveRequest.find({
-      userId: employeeId,
+    Leave.find({
+      employeeId: new mongoose.Types.ObjectId(employeeId),
       status: "approved",
       startDate: { $lt: end },
       endDate: { $gte: start },
@@ -245,7 +253,7 @@ export async function calculateEmployeePayroll(params: {
   const holidays = new Set((policy.holidays || []).map((h) => h.date));
   const weekends = new Set(policy.weekends || [0]);
 
-  const days = eachDayOfMonth(year, month);
+  const days = eachDayOfPayrollPeriod(year, month);
 
   // Only process days up to today — future dates have not occurred yet.
   const processingCutoff = new Date();
@@ -264,8 +272,9 @@ export async function calculateEmployeePayroll(params: {
   const salaryMode =
     ((policy as any).salaryCalculationMode as "per-day" | "per-hour") ||
     "per-day";
-  const overtimeEnabled =
-    salaryMode === "per-hour" && !!(policy as any).overtimeEnabled;
+  // Overtime applies in both per-day and per-hour modes — any minutes beyond the
+  // required shift hours are paid at (perHourSalary / 60) * overtimeMultiplier per minute.
+  const overtimeEnabled = !!(policy as any).overtimeEnabled;
   const overtimeMultiplier =
     typeof (policy as any).overtimeMultiplier === "number" &&
     (policy as any).overtimeMultiplier >= 1
@@ -306,6 +315,17 @@ export async function calculateEmployeePayroll(params: {
   let totalWorkedHoursAcc = 0;
   let totalOvertimeHoursAcc = 0;
   let overtimeAmountAcc = 0;
+
+  // Company grace allowance per payroll period:
+  // first 1 absent → paid by company, first 1 half-day → no deduction taken.
+  // Only the excess is deducted.
+  const COMPANY_PAID_ABSENTS = 1;
+  const COMPANY_PAID_HALF_DAYS = 1;
+  let graceAbsentsUsed = 0;
+  let graceHalfDaysUsed = 0;
+  // Counts of days that actually incur a deduction (excludes grace days)
+  let deductibleAbsentDays = 0;
+  let deductibleHalfDays = 0;
 
   for (const day of days) {
     const dayKey = toYmd(day);
@@ -424,19 +444,32 @@ export async function calculateEmployeePayroll(params: {
 
     if (!attendance || !attendance.checkIn) {
       absentDays += 1;
+      const isGrace = graceAbsentsUsed < COMPANY_PAID_ABSENTS;
+      if (isGrace) graceAbsentsUsed += 1;
+      else deductibleAbsentDays += 1;
+      // Grace absent: company pays the full day even though no one showed up
+      const graceDailyEarned = isGrace
+        ? salaryMode === "per-hour"
+          ? round2(hoursPerDay * perHourSalary)
+          : perDaySalary
+        : 0;
       breakdown.push({
         date: dayKey,
         dayType: "absent",
         attendanceStatus: "absent",
-        payableFraction: 0,
-        deductionFraction: 1,
+        payableFraction: isGrace ? 1 : 0,
+        deductionFraction: isGrace ? 0 : 1,
         lateMinutes: 0,
         workedMinutes: 0,
         breakMinutes: 0,
         overtimeMinutes: 0,
-        dailySalaryEarned: 0,
+        dailySalaryEarned: graceDailyEarned,
         autoClosed: false,
-        remarks: ["No attendance"],
+        remarks: [
+          isGrace
+            ? "No attendance — company grace day (paid, 1 per period)"
+            : "No attendance",
+        ],
       });
       continue;
     }
@@ -480,21 +513,35 @@ export async function calculateEmployeePayroll(params: {
 
     if (lateMinutes >= policy.absentAfterMinutes) {
       dayType = "absent";
-      payableFraction = 0;
-      deductionFraction = 1;
       absentDays += 1;
-      remarks.push("Marked absent by late policy");
+      const isGrace = graceAbsentsUsed < COMPANY_PAID_ABSENTS;
+      if (isGrace) graceAbsentsUsed += 1;
+      else deductibleAbsentDays += 1;
+      payableFraction = isGrace ? 1 : 0;
+      deductionFraction = isGrace ? 0 : 1;
+      remarks.push(
+        isGrace
+          ? "Marked absent by late policy — company grace day applied (1 per period)"
+          : "Marked absent by late policy",
+      );
     } else if (
       lateMinutes >= policy.halfDayAfterMinutes ||
       workedMinutes < halfDayMinutes
     ) {
       dayType = "half-day";
-      payableFraction = 0.5;
-      deductionFraction = 0.5;
       halfDays += 1;
+      const isGrace = graceHalfDaysUsed < COMPANY_PAID_HALF_DAYS;
+      if (isGrace) graceHalfDaysUsed += 1;
+      else deductibleHalfDays += 1;
+      payableFraction = 0.5;
+      deductionFraction = isGrace ? 0 : 0.5; // grace → no deduction; otherwise deduct 0.5
 
       if (lateMinutes >= policy.halfDayAfterMinutes) {
-        remarks.push("Marked half day by late policy");
+        remarks.push(
+          isGrace
+            ? "Marked half day by late policy — company grace day applied (1 per period)"
+            : "Marked half day by late policy",
+        );
       }
       if (workedMinutes < halfDayMinutes) {
         remarks.push("Worked less than half day threshold");
@@ -522,8 +569,9 @@ export async function calculateEmployeePayroll(params: {
 
     if (salaryMode === "per-hour") {
       if (dayType === "absent") {
-        // absent (by late policy or no attendance) â†’ earns nothing
-        dailySalaryEarned = 0;
+        // Grace absent (deductionFraction=0): company pays the full day
+        dailySalaryEarned =
+          deductionFraction === 0 ? round2(hoursPerDay * perHourSalary) : 0;
       } else {
         // present or half-day: pay for actual regular hours worked (capped at required)
         const regularWorked = Math.min(workedMinutes, requiredMinutes);
@@ -533,22 +581,22 @@ export async function calculateEmployeePayroll(params: {
         // track total worked hours
         totalWorkedHoursAcc += round2(workedMinutes / 60);
 
-        // overtime (beyond required shift hours)
+        // Overtime: every minute beyond required shift hours
         if (overtimeEnabled && workedMinutes > requiredMinutes) {
           dayOvertimeMinutes = workedMinutes - requiredMinutes;
+          // per-minute rate = perHourSalary / 60
+          const perMinuteSalary = round2(perHourSalary / 60);
           const otEarned = round2(
-            (dayOvertimeMinutes / 60) * perHourSalary * overtimeMultiplier,
+            dayOvertimeMinutes * perMinuteSalary * overtimeMultiplier,
           );
           dailySalaryEarned = round2(dailySalaryEarned + otEarned);
           overtimeAmountAcc = round2(overtimeAmountAcc + otEarned);
           totalOvertimeHoursAcc = round2(
             totalOvertimeHoursAcc + dayOvertimeMinutes / 60,
           );
-          if (dayOvertimeMinutes > 0) {
-            remarks.push(
-              `Overtime: ${dayOvertimeMinutes}m (${round2(dayOvertimeMinutes / 60)}h x${overtimeMultiplier})`,
-            );
-          }
+          remarks.push(
+            `Overtime: ${dayOvertimeMinutes}m × ${perMinuteSalary}/min × ${overtimeMultiplier} = +${otEarned}`,
+          );
         }
 
         // In per-hour mode, update payableFraction to reflect actual hours ratio
@@ -562,12 +610,28 @@ export async function calculateEmployeePayroll(params: {
     } else {
       // per-day mode: earned is the HR-fraction of a full day's pay
       if (dayType === "absent") {
-        dailySalaryEarned = 0;
+        // Grace absent (deductionFraction=0): company pays the full day
+        dailySalaryEarned = deductionFraction === 0 ? perDaySalary : 0;
       } else {
         dailySalaryEarned = round2(payableFraction * perDaySalary);
-      }
-      if (dayType !== "absent") {
         totalWorkedHoursAcc += round2(workedMinutes / 60);
+
+        // Overtime: per-minute rate beyond required shift hours
+        if (overtimeEnabled && workedMinutes > requiredMinutes) {
+          dayOvertimeMinutes = workedMinutes - requiredMinutes;
+          const perMinuteSalary = round2(perHourSalary / 60);
+          const otEarned = round2(
+            dayOvertimeMinutes * perMinuteSalary * overtimeMultiplier,
+          );
+          dailySalaryEarned = round2(dailySalaryEarned + otEarned);
+          overtimeAmountAcc = round2(overtimeAmountAcc + otEarned);
+          totalOvertimeHoursAcc = round2(
+            totalOvertimeHoursAcc + dayOvertimeMinutes / 60,
+          );
+          remarks.push(
+            `Overtime: ${dayOvertimeMinutes}m × ${perMinuteSalary}/min × ${overtimeMultiplier} = +${otEarned}`,
+          );
+        }
       }
     }
 
@@ -596,7 +660,10 @@ export async function calculateEmployeePayroll(params: {
       : 0;
 
   const deductionDays =
-    absentDays + unpaidLeaveDays + halfDays * 0.5 + latePenaltyLeaveDays;
+    deductibleAbsentDays +
+    unpaidLeaveDays +
+    deductibleHalfDays * 0.5 +
+    latePenaltyLeaveDays;
 
   let deductionAmount: number;
   let netSalary: number;
@@ -618,9 +685,12 @@ export async function calculateEmployeePayroll(params: {
     );
     netSalary = Math.max(0, round2(earnedSum - penaltyDeduction));
   } else {
-    // per-day mode (original formula)
+    // per-day mode: deduct absent/unpaid/half-day fractions, then add overtime
     deductionAmount = round2(perDaySalary * deductionDays);
-    netSalary = Math.max(0, round2(employee.salary - deductionAmount));
+    netSalary = Math.max(
+      0,
+      round2(employee.salary - deductionAmount + overtimeAmount),
+    );
   }
 
   const summary: PayrollSummary = {

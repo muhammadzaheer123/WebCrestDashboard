@@ -4,8 +4,6 @@ import Attendance from "@/models/attendance.model";
 import jwt from "jsonwebtoken";
 import { cookies } from "next/headers";
 import mongoose from "mongoose";
-import { ymd } from "@/lib/dates";
-
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
@@ -32,11 +30,15 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const today = ymd();
+    const today = new Date();
+    const startOfDay = new Date(today);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(startOfDay);
+    endOfDay.setDate(endOfDay.getDate() + 1);
 
     const attendance = await Attendance.findOne({
       employeeId: String(employeeId),
-      date: today,
+      date: { $gte: startOfDay, $lt: endOfDay },
     });
 
     if (!attendance) {

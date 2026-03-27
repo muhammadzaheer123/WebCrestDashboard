@@ -230,6 +230,8 @@ export async function POST(req: NextRequest) {
     reason,
     status: "pending",
     hrComment: "",
+    isHalfDay: !!isHalfDay,
+    halfDayPart: isHalfDay ? halfDayPart : null,
   });
 
   return NextResponse.json(
