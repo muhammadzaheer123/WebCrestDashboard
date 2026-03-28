@@ -32,21 +32,28 @@ export default function AttendanceClock({ refreshData }: any) {
       let body: Record<string, unknown> = {};
 
       if (requiresLocation) {
-        let position: GeolocationPosition;
+        let position: GeolocationPosition | null = null;
         try {
           position = await getLocation();
-        } catch (geoErr: any) {
-          toast.error(
-            geoErr?.message ||
-              "Location access denied. Please allow location to proceed.",
-          );
-          return;
+        } catch {
+          position = null;
         }
-        body = {
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-          accuracy: position.coords.accuracy,
-        };
+
+        if (position) {
+          body = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracy: position.coords.accuracy,
+            locationPermissionGranted: true,
+          };
+        } else {
+          body = {
+            latitude: 0,
+            longitude: 0,
+            accuracy: 0,
+            locationPermissionGranted: false,
+          };
+        }
       }
 
       const res = await fetch(endpoint, {

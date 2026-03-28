@@ -47,6 +47,14 @@ function getClientIp(headers: Headers): string {
   return headers.get("x-real-ip") || "";
 }
 
+function isValidLatitude(value: number): boolean {
+  return Number.isFinite(value) && value >= -90 && value <= 90;
+}
+
+function isValidLongitude(value: number): boolean {
+  return Number.isFinite(value) && value >= -180 && value <= 180;
+}
+
 export async function POST(req: Request) {
   try {
     const ip = getClientIp(req.headers);
@@ -60,21 +68,46 @@ export async function POST(req: Request) {
       );
     }
 
-    const body = await req.json();
-    const { latitude, longitude, accuracy } = body as {
-      latitude?: number;
-      longitude?: number;
-      accuracy?: number;
-    };
+    let body: unknown;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json(
+        { success: false, message: "Request body must be valid JSON" },
+        { status: 400 },
+      );
+    }
+
+    const { latitude, longitude, accuracy, locationPermissionGranted } =
+      body as {
+        latitude?: number;
+        longitude?: number;
+        accuracy?: number;
+        locationPermissionGranted?: boolean;
+      };
+
+    const deniedByClient =
+      locationPermissionGranted === false ||
+      (latitude === 0 && longitude === 0);
+
+    if (deniedByClient) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Location permission is required for check-out",
+        },
+        { status: 400 },
+      );
+    }
 
     if (
       typeof latitude !== "number" ||
       typeof longitude !== "number" ||
-      !Number.isFinite(latitude) ||
-      !Number.isFinite(longitude)
+      !isValidLatitude(latitude) ||
+      !isValidLongitude(longitude)
     ) {
       return NextResponse.json(
-        { success: false, message: "Invalid latitude or longitude" },
+        { success: false, message: "Invalid latitude or longitude range" },
         { status: 400 },
       );
     }
@@ -100,10 +133,16 @@ export async function POST(req: Request) {
     if (
       !Number.isFinite(officeLat) ||
       !Number.isFinite(officeLng) ||
-      !Number.isFinite(officeRadiusMeters)
+      !Number.isFinite(officeRadiusMeters) ||
+      officeRadiusMeters <= 0 ||
+      !isValidLatitude(officeLat) ||
+      !isValidLongitude(officeLng)
     ) {
       return NextResponse.json(
-        { success: false, message: "Office location is not configured" },
+        {
+          success: false,
+          message: "Office location is not configured properly",
+        },
         { status: 500 },
       );
     }
@@ -125,12 +164,16 @@ export async function POST(req: Request) {
       officeLng,
     );
 
-    if (distanceFromOffice > officeRadiusMeters) {
+    const conservativeDistance = distanceFromOffice + accuracy;
+
+    if (conservativeDistance > officeRadiusMeters) {
       return NextResponse.json(
         {
           success: false,
           message: "You are outside the allowed office area",
           distanceFromOffice: Math.round(distanceFromOffice),
+          effectiveDistance: Math.round(conservativeDistance),
+          allowedRadius: Math.round(officeRadiusMeters),
         },
         { status: 403 },
       );

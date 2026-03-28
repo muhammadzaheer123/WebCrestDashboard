@@ -15,31 +15,43 @@ export default function AttendanceActions({
 
       if (requiresLocation) {
         if (!navigator.geolocation) {
-          showToast("Geolocation is not supported by your browser", "error");
-          return;
+          body = {
+            latitude: 0,
+            longitude: 0,
+            accuracy: 0,
+            locationPermissionGranted: false,
+          };
+        } else {
+          let position: GeolocationPosition | null = null;
+          try {
+            position = await new Promise<GeolocationPosition>(
+              (resolve, reject) =>
+                navigator.geolocation.getCurrentPosition(resolve, reject, {
+                  enableHighAccuracy: true,
+                  timeout: 10000,
+                  maximumAge: 0,
+                }),
+            );
+          } catch {
+            position = null;
+          }
+
+          if (position) {
+            body = {
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
+              accuracy: position.coords.accuracy,
+              locationPermissionGranted: true,
+            };
+          } else {
+            body = {
+              latitude: 0,
+              longitude: 0,
+              accuracy: 0,
+              locationPermissionGranted: false,
+            };
+          }
         }
-        let position: GeolocationPosition;
-        try {
-          position = await new Promise<GeolocationPosition>((resolve, reject) =>
-            navigator.geolocation.getCurrentPosition(resolve, reject, {
-              enableHighAccuracy: true,
-              timeout: 10000,
-              maximumAge: 0,
-            }),
-          );
-        } catch (geoErr: any) {
-          showToast(
-            geoErr?.message ||
-              "Location access denied. Please allow location to proceed.",
-            "error",
-          );
-          return;
-        }
-        body = {
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-          accuracy: position.coords.accuracy,
-        };
       }
 
       const res = await fetch(path, {
