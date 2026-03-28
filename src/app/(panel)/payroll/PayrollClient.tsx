@@ -115,9 +115,9 @@ function payrollPeriodLabel(month: number, year: number) {
 
 function formatMoney(value: number) {
   if (!Number.isFinite(value)) return "—";
-  return new Intl.NumberFormat("en-US", {
+  return new Intl.NumberFormat("en-PK", {
     style: "currency",
-    currency: "USD",
+    currency: "PKR",
     maximumFractionDigits: 2,
   }).format(value);
 }
@@ -139,6 +139,15 @@ function formatMinutes(value: number) {
   if (h <= 0) return `${m}m`;
   if (m <= 0) return `${h}h`;
   return `${h}h ${m}m`;
+}
+
+function isLateCounted(row: PayrollBreakdownRow) {
+  if (!Array.isArray(row.remarks) || row.remarks.length === 0) return false;
+
+  return row.remarks.some((remark) => {
+    const text = String(remark || "").toLowerCase();
+    return text.startsWith("short work by") || text.startsWith("late by");
+  });
 }
 
 function payrollStatusPill(status: PayrollDoc["status"]) {
@@ -842,9 +851,7 @@ export default function PayrollClient() {
                             </td>
 
                             <td className="whitespace-nowrap px-5 py-3.5 text-zinc-300">
-                              {row.lateMinutes > 0
-                                ? `${row.lateMinutes}m`
-                                : "—"}
+                              {isLateCounted(row) ? `${row.lateMinutes}m` : "—"}
                             </td>
 
                             {payroll.totalOvertimeHours > 0 && (

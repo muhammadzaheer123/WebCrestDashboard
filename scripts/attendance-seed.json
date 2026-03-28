@@ -53,7 +53,7 @@
       }
     ],
     "status": "present",
-    "totalHours": 22.06,
+    "totalHours": 22.07,
     "totalBreakTime": 809,
     "totalWorkHours": 8.58,
     "network": {
@@ -218,9 +218,9 @@
     },
     "breaks": [],
     "status": "present",
-    "totalHours": 7.02,
+    "totalHours": 8.02,
     "totalBreakTime": 0,
-    "totalWorkHours": 7.02,
+    "totalWorkHours": 8.02,
     "network": {
       "ip": "192.168.1.1",
       "ssid": "Office-WiFi-5G",

@@ -37,6 +37,7 @@ export interface IAttendance extends Document {
   checkOutIP?: string;
   source?: "button" | "auto";
   checkInLocation?: ICheckInLocation;
+  checkOutLocation?: ICheckInLocation;
 }
 
 const breakSchema = new Schema<IBreak>({
@@ -107,6 +108,7 @@ const attendanceSchema = new Schema<IAttendance>(
       default: "button",
     },
     checkInLocation: checkInLocationSchema,
+    checkOutLocation: checkInLocationSchema,
   },
   {
     timestamps: true,

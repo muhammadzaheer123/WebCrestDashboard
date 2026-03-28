@@ -4,16 +4,56 @@ import { useState } from "react";
 import { Play, LogOut, Coffee } from "lucide-react";
 import toast from "react-hot-toast";
 
+function getLocation(): Promise<GeolocationPosition> {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject(new Error("Geolocation is not supported by your browser"));
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(resolve, reject, {
+      enableHighAccuracy: true,
+      timeout: 10000,
+      maximumAge: 0,
+    });
+  });
+}
+
 export default function AttendanceClock({ refreshData }: any) {
   const [loading, setLoading] = useState(false);
 
-  const callApi = async (endpoint: string, successMessage: string) => {
+  const callApi = async (
+    endpoint: string,
+    successMessage: string,
+    requiresLocation = false,
+  ) => {
     try {
       setLoading(true);
+
+      let body: Record<string, unknown> = {};
+
+      if (requiresLocation) {
+        let position: GeolocationPosition;
+        try {
+          position = await getLocation();
+        } catch (geoErr: any) {
+          toast.error(
+            geoErr?.message ||
+              "Location access denied. Please allow location to proceed.",
+          );
+          return;
+        }
+        body = {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: position.coords.accuracy,
+        };
+      }
+
       const res = await fetch(endpoint, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -40,7 +80,9 @@ export default function AttendanceClock({ refreshData }: any) {
         {/* Check In */}
         <button
           disabled={loading}
-          onClick={() => callApi("/api/attendance/check-in", "Checked in")}
+          onClick={() =>
+            callApi("/api/attendance/check-in", "Checked in", true)
+          }
           className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-500 to-fuchsia-500 py-3.5 text-sm font-medium text-white shadow-lg shadow-violet-500/25 transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Play size={15} />
@@ -50,7 +92,9 @@ export default function AttendanceClock({ refreshData }: any) {
         {/* Check Out */}
         <button
           disabled={loading}
-          onClick={() => callApi("/api/attendance/check-out", "Checked out")}
+          onClick={() =>
+            callApi("/api/attendance/check-out", "Checked out", true)
+          }
           className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 py-3.5 text-sm font-medium text-red-400 shadow-sm transition hover:bg-red-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <LogOut size={15} />

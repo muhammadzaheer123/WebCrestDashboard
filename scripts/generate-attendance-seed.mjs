@@ -77,7 +77,7 @@ const ACTUAL_ENTRIES = [
     date: "2026-03-16",
     checkIn: "20:13",
     checkOut: "2026-03-17 04:14",
-    durationMin: 421,
+    durationMin: 481,
   },
   {
     date: "2026-03-17",
@@ -180,14 +180,18 @@ function buildRecord(entry) {
   });
 
   const totalBreakTime = breaks.reduce((sum, b) => sum + b.duration, 0);
+
+  // Always derive from timestamps so the stored value matches what the
+  // payroll engine will compute — never trust the manual durationMin field.
+  const grossMs = checkOut ? checkOut.getTime() - checkIn.getTime() : null;
+  const grossMinutes =
+    grossMs !== null ? Math.max(0, Math.round(grossMs / 60000)) : null;
+  const computedWorkMinutes =
+    grossMinutes !== null ? Math.max(0, grossMinutes - totalBreakTime) : null;
   const totalWorkHours =
-    typeof entry.durationMin === "number"
-      ? round2(entry.durationMin / 60)
-      : undefined;
+    computedWorkMinutes !== null ? round2(computedWorkMinutes / 60) : undefined;
   const totalHours =
-    checkOut && totalWorkHours !== undefined
-      ? round2(totalWorkHours + totalBreakTime / 60)
-      : undefined;
+    grossMinutes !== null ? round2(grossMinutes / 60) : undefined;
 
   const record = {
     employeeId: EMPLOYEE_ID,

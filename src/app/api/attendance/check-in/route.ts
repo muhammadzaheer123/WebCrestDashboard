@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import Attendance from "@/models/attendance.model";
 import { connectDB } from "@/lib/db";
+import { haversineDistanceMeters } from "@/lib/location";
 import jwt from "jsonwebtoken";
 import { cookies } from "next/headers";
 
@@ -42,6 +43,7 @@ function getClientIp(headers: Headers): string {
 export async function POST(req: Request) {
   try {
     const ip = getClientIp(req.headers);
+    const userAgent = req.headers.get("user-agent") || "";
 
     const empId = await getEmployeeId();
 
@@ -49,6 +51,82 @@ export async function POST(req: Request) {
       return NextResponse.json(
         { success: false, message: "Unauthenticated" },
         { status: 401 },
+      );
+    }
+
+    const body = await req.json();
+    const { latitude, longitude, accuracy } = body as {
+      latitude?: number;
+      longitude?: number;
+      accuracy?: number;
+    };
+
+    if (
+      typeof latitude !== "number" ||
+      typeof longitude !== "number" ||
+      !Number.isFinite(latitude) ||
+      !Number.isFinite(longitude)
+    ) {
+      return NextResponse.json(
+        { success: false, message: "Invalid latitude or longitude" },
+        { status: 400 },
+      );
+    }
+
+    if (
+      typeof accuracy !== "number" ||
+      !Number.isFinite(accuracy) ||
+      accuracy <= 0
+    ) {
+      return NextResponse.json(
+        { success: false, message: "Invalid location accuracy" },
+        { status: 400 },
+      );
+    }
+
+    const officeLat = Number(process.env.OFFICE_LAT);
+    const officeLng = Number(process.env.OFFICE_LNG);
+    const officeRadiusMeters = Number(process.env.OFFICE_RADIUS_METERS || 100);
+    const maxAccuracyMeters = Number(
+      process.env.MAX_LOCATION_ACCURACY_METERS || 100,
+    );
+
+    if (
+      !Number.isFinite(officeLat) ||
+      !Number.isFinite(officeLng) ||
+      !Number.isFinite(officeRadiusMeters)
+    ) {
+      return NextResponse.json(
+        { success: false, message: "Office location is not configured" },
+        { status: 500 },
+      );
+    }
+
+    if (accuracy > maxAccuracyMeters) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: `Location accuracy is too low. Current accuracy is ${Math.round(accuracy)}m`,
+        },
+        { status: 400 },
+      );
+    }
+
+    const distanceFromOffice = haversineDistanceMeters(
+      latitude,
+      longitude,
+      officeLat,
+      officeLng,
+    );
+
+    if (distanceFromOffice > officeRadiusMeters) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "You are outside the allowed office area",
+          distanceFromOffice: Math.round(distanceFromOffice),
+        },
+        { status: 403 },
       );
     }
 
@@ -67,6 +145,7 @@ export async function POST(req: Request) {
         {
           success: false,
           message: "Already checked-in",
+          distanceFromOffice: Math.round(distanceFromOffice),
           date: start,
           employeeId: empId,
         },
@@ -74,10 +153,15 @@ export async function POST(req: Request) {
       );
     }
 
-    const networkMeta = {
-      ip,
-      ssid: "",
-      ua: req.headers.get("user-agent") || "",
+    const networkMeta = { ip, ssid: "", ua: userAgent };
+    const locationMeta = {
+      latitude,
+      longitude,
+      accuracy,
+      distanceFromOffice: Math.round(distanceFromOffice),
+      checkedAt: now,
+      userAgent,
+      ipAddress: ip,
     };
 
     if (!doc) {
@@ -89,6 +173,7 @@ export async function POST(req: Request) {
         source: "button",
         network: networkMeta,
         checkInIP: ip,
+        checkInLocation: locationMeta,
         breaks: [],
         totalBreakTime: 0,
         totalWorkHours: 0,
@@ -99,6 +184,7 @@ export async function POST(req: Request) {
         {
           success: true,
           message: "Checked-in",
+          distanceFromOffice: Math.round(distanceFromOffice),
           date: start,
           recordId: created._id,
           employeeId: empId,
@@ -113,6 +199,7 @@ export async function POST(req: Request) {
     doc.source = "button";
     doc.network = networkMeta;
     doc.checkInIP = ip;
+    doc.checkInLocation = locationMeta;
     doc.date = start;
 
     await doc.save();
@@ -121,6 +208,7 @@ export async function POST(req: Request) {
       {
         success: true,
         message: "Checked-in",
+        distanceFromOffice: Math.round(distanceFromOffice),
         date: start,
         recordId: doc._id,
         employeeId: empId,

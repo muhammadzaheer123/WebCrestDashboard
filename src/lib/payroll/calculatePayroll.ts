@@ -263,6 +263,11 @@ export async function calculateEmployeePayroll(params: {
   const requiredMinutes = getRequiredMinutes(policy, shift);
   const halfDayMinutes =
     policy.halfDayMinutes || Math.floor(requiredMinutes / 2);
+  const graceMinutes = Math.max(0, Number(policy.graceMinutes || 0));
+  const lateThresholdMinutes = Math.max(
+    Number(policy.lateAfterMinutes || 0),
+    graceMinutes,
+  );
 
   // ------------------------------------------------------------------
   // Salary rate computation
@@ -474,8 +479,6 @@ export async function calculateEmployeePayroll(params: {
       continue;
     }
 
-    const scheduledStart = parseTimeOnDate(day, shift.start);
-
     const actualCheckIn = new Date(attendance.checkIn);
     const actualCheckOut = attendance.checkOut
       ? new Date(attendance.checkOut)
@@ -495,10 +498,15 @@ export async function calculateEmployeePayroll(params: {
         )
       : 0;
     const workedMinutes = Math.max(0, grossMinutes - breakMinutes);
-    const lateMinutes = Math.max(
-      0,
-      Math.round((actualCheckIn.getTime() - scheduledStart.getTime()) / 60000),
-    );
+    const shortWorkMinutes = Math.max(0, requiredMinutes - workedMinutes);
+    const shortageLateMinutes =
+      shortWorkMinutes > graceMinutes ? shortWorkMinutes : 0;
+    const lateMinutes = shortageLateMinutes;
+
+    // Effective half-day boundary: grace applies here too, so a shortfall
+    // within graceMinutes of the half-day threshold is treated as "late but
+    // still present", not as a half-day.
+    const effectiveHalfDayMinutes = Math.max(0, halfDayMinutes - graceMinutes);
 
     // --- Day classification (same for both modes) ---
     let dayType: PayrollDay["dayType"] = "present";
@@ -506,28 +514,14 @@ export async function calculateEmployeePayroll(params: {
     let deductionFraction = 0;
     const remarks: string[] = [];
 
-    if (lateMinutes >= policy.lateAfterMinutes) {
+    if (lateMinutes > lateThresholdMinutes) {
       lateCount += 1;
-      remarks.push(`Late by ${lateMinutes} minute(s)`);
+      if (shortageLateMinutes > 0) {
+        remarks.push(`Short work by ${shortageLateMinutes} minute(s)`);
+      }
     }
 
-    if (lateMinutes >= policy.absentAfterMinutes) {
-      dayType = "absent";
-      absentDays += 1;
-      const isGrace = graceAbsentsUsed < COMPANY_PAID_ABSENTS;
-      if (isGrace) graceAbsentsUsed += 1;
-      else deductibleAbsentDays += 1;
-      payableFraction = isGrace ? 1 : 0;
-      deductionFraction = isGrace ? 0 : 1;
-      remarks.push(
-        isGrace
-          ? "Marked absent by late policy — company grace day applied (1 per period)"
-          : "Marked absent by late policy",
-      );
-    } else if (
-      lateMinutes >= policy.halfDayAfterMinutes ||
-      workedMinutes < halfDayMinutes
-    ) {
+    if (workedMinutes < effectiveHalfDayMinutes) {
       dayType = "half-day";
       halfDays += 1;
       const isGrace = graceHalfDaysUsed < COMPANY_PAID_HALF_DAYS;
@@ -536,16 +530,7 @@ export async function calculateEmployeePayroll(params: {
       payableFraction = 0.5;
       deductionFraction = isGrace ? 0 : 0.5; // grace → no deduction; otherwise deduct 0.5
 
-      if (lateMinutes >= policy.halfDayAfterMinutes) {
-        remarks.push(
-          isGrace
-            ? "Marked half day by late policy — company grace day applied (1 per period)"
-            : "Marked half day by late policy",
-        );
-      }
-      if (workedMinutes < halfDayMinutes) {
-        remarks.push("Worked less than half day threshold");
-      }
+      remarks.push("Worked less than half day threshold");
     } else {
       dayType = "present";
       payableFraction = 1;
@@ -568,70 +553,59 @@ export async function calculateEmployeePayroll(params: {
     let dailySalaryEarned = 0;
 
     if (salaryMode === "per-hour") {
-      if (dayType === "absent") {
-        // Grace absent (deductionFraction=0): company pays the full day
-        dailySalaryEarned =
-          deductionFraction === 0 ? round2(hoursPerDay * perHourSalary) : 0;
-      } else {
-        // present or half-day: pay for actual regular hours worked (capped at required)
-        const regularWorked = Math.min(workedMinutes, requiredMinutes);
-        const regularEarned = round2((regularWorked / 60) * perHourSalary);
-        dailySalaryEarned = regularEarned;
+      // present or half-day: pay for actual regular hours worked (capped at required)
+      const regularWorked = Math.min(workedMinutes, requiredMinutes);
+      const regularEarned = round2((regularWorked / 60) * perHourSalary);
+      dailySalaryEarned = regularEarned;
 
-        // track total worked hours
-        totalWorkedHoursAcc += round2(workedMinutes / 60);
+      // track total worked hours
+      totalWorkedHoursAcc += round2(workedMinutes / 60);
 
-        // Overtime: every minute beyond required shift hours
-        if (overtimeEnabled && workedMinutes > requiredMinutes) {
-          dayOvertimeMinutes = workedMinutes - requiredMinutes;
-          // per-minute rate = perHourSalary / 60
-          const perMinuteSalary = round2(perHourSalary / 60);
-          const otEarned = round2(
-            dayOvertimeMinutes * perMinuteSalary * overtimeMultiplier,
-          );
-          dailySalaryEarned = round2(dailySalaryEarned + otEarned);
-          overtimeAmountAcc = round2(overtimeAmountAcc + otEarned);
-          totalOvertimeHoursAcc = round2(
-            totalOvertimeHoursAcc + dayOvertimeMinutes / 60,
-          );
-          remarks.push(
-            `Overtime: ${dayOvertimeMinutes}m × ${perMinuteSalary}/min × ${overtimeMultiplier} = +${otEarned}`,
-          );
-        }
-
-        // In per-hour mode, update payableFraction to reflect actual hours ratio
-        // so the Payable column in the UI shows reality
-        const hrFraction = round2(
-          Math.min(workedMinutes, requiredMinutes) / requiredMinutes,
+      // Overtime: every minute beyond required shift hours
+      if (overtimeEnabled && workedMinutes > requiredMinutes) {
+        dayOvertimeMinutes = workedMinutes - requiredMinutes;
+        // per-minute rate = perHourSalary / 60
+        const perMinuteSalary = round2(perHourSalary / 60);
+        const otEarned = round2(
+          dayOvertimeMinutes * perMinuteSalary * overtimeMultiplier,
         );
-        payableFraction = hrFraction;
-        deductionFraction = round2(1 - hrFraction);
+        dailySalaryEarned = round2(dailySalaryEarned + otEarned);
+        overtimeAmountAcc = round2(overtimeAmountAcc + otEarned);
+        totalOvertimeHoursAcc = round2(
+          totalOvertimeHoursAcc + dayOvertimeMinutes / 60,
+        );
+        remarks.push(
+          `Overtime: ${dayOvertimeMinutes}m × ${perMinuteSalary}/min × ${overtimeMultiplier} = +${otEarned}`,
+        );
       }
+
+      // In per-hour mode, update payableFraction to reflect actual hours ratio
+      // so the Payable column in the UI shows reality
+      const hrFraction = round2(
+        Math.min(workedMinutes, requiredMinutes) / requiredMinutes,
+      );
+      payableFraction = hrFraction;
+      deductionFraction = round2(1 - hrFraction);
     } else {
       // per-day mode: earned is the HR-fraction of a full day's pay
-      if (dayType === "absent") {
-        // Grace absent (deductionFraction=0): company pays the full day
-        dailySalaryEarned = deductionFraction === 0 ? perDaySalary : 0;
-      } else {
-        dailySalaryEarned = round2(payableFraction * perDaySalary);
-        totalWorkedHoursAcc += round2(workedMinutes / 60);
+      dailySalaryEarned = round2(payableFraction * perDaySalary);
+      totalWorkedHoursAcc += round2(workedMinutes / 60);
 
-        // Overtime: per-minute rate beyond required shift hours
-        if (overtimeEnabled && workedMinutes > requiredMinutes) {
-          dayOvertimeMinutes = workedMinutes - requiredMinutes;
-          const perMinuteSalary = round2(perHourSalary / 60);
-          const otEarned = round2(
-            dayOvertimeMinutes * perMinuteSalary * overtimeMultiplier,
-          );
-          dailySalaryEarned = round2(dailySalaryEarned + otEarned);
-          overtimeAmountAcc = round2(overtimeAmountAcc + otEarned);
-          totalOvertimeHoursAcc = round2(
-            totalOvertimeHoursAcc + dayOvertimeMinutes / 60,
-          );
-          remarks.push(
-            `Overtime: ${dayOvertimeMinutes}m × ${perMinuteSalary}/min × ${overtimeMultiplier} = +${otEarned}`,
-          );
-        }
+      // Overtime: per-minute rate beyond required shift hours
+      if (overtimeEnabled && workedMinutes > requiredMinutes) {
+        dayOvertimeMinutes = workedMinutes - requiredMinutes;
+        const perMinuteSalary = round2(perHourSalary / 60);
+        const otEarned = round2(
+          dayOvertimeMinutes * perMinuteSalary * overtimeMultiplier,
+        );
+        dailySalaryEarned = round2(dailySalaryEarned + otEarned);
+        overtimeAmountAcc = round2(overtimeAmountAcc + otEarned);
+        totalOvertimeHoursAcc = round2(
+          totalOvertimeHoursAcc + dayOvertimeMinutes / 60,
+        );
+        remarks.push(
+          `Overtime: ${dayOvertimeMinutes}m × ${perMinuteSalary}/min × ${overtimeMultiplier} = +${otEarned}`,
+        );
       }
     }
 
