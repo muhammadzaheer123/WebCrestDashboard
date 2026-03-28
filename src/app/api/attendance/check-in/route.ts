@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import Attendance from "@/models/attendance.model";
 import { connectDB } from "@/lib/db";
 import jwt from "jsonwebtoken";
-import { ensureOfficeGate } from "@/lib/ip";
 import { cookies } from "next/headers";
 
 export const runtime = "nodejs";
@@ -34,20 +33,15 @@ function getDayRange(date = new Date()) {
   return { start, end };
 }
 
+function getClientIp(headers: Headers): string {
+  const xff = headers.get("x-forwarded-for");
+  if (xff) return xff.split(",")[0]?.trim() || "";
+  return headers.get("x-real-ip") || "";
+}
+
 export async function POST(req: Request) {
   try {
-    const gate = ensureOfficeGate(req.headers);
-    if (!gate.ok) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Not on office network",
-          reason: gate.reason,
-          ip: gate.ip ?? undefined,
-        },
-        { status: 403 },
-      );
-    }
+    const ip = getClientIp(req.headers);
 
     const empId = await getEmployeeId();
 
@@ -81,8 +75,8 @@ export async function POST(req: Request) {
     }
 
     const networkMeta = {
-      ip: gate.ip,
-      ssid: gate.ssid,
+      ip,
+      ssid: "",
       ua: req.headers.get("user-agent") || "",
     };
 
@@ -94,7 +88,7 @@ export async function POST(req: Request) {
         status: "present",
         source: "button",
         network: networkMeta,
-        checkInIP: gate.ip,
+        checkInIP: ip,
         breaks: [],
         totalBreakTime: 0,
         totalWorkHours: 0,
@@ -118,7 +112,7 @@ export async function POST(req: Request) {
     doc.status = "present";
     doc.source = "button";
     doc.network = networkMeta;
-    doc.checkInIP = gate.ip;
+    doc.checkInIP = ip;
     doc.date = start;
 
     await doc.save();
