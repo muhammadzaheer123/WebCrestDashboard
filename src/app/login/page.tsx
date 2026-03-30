@@ -114,10 +114,6 @@ export default function LoginPage() {
         <button className="primaryBtn" type="submit" disabled={loading}>
           {loading ? "Signing in..." : "Sign in"}
         </button>
-
-        <div className="formFooter">
-          Need an account? <a href="#">Contact to HR!</a>
-        </div>
       </form>
     </div>
   );

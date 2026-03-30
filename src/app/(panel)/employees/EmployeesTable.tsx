@@ -56,10 +56,10 @@ function statusPill(active: boolean) {
 }
 
 function formatSalary(value: number) {
-  if (typeof value !== "number" || Number.isNaN(value)) return "—";
-  return new Intl.NumberFormat("en-US", {
+  if (!Number.isFinite(value)) return "—";
+  return new Intl.NumberFormat("en-PK", {
     style: "currency",
-    currency: "USD",
+    currency: "PKR",
     maximumFractionDigits: 2,
   }).format(value);
 }
