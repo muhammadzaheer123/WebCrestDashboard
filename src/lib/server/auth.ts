@@ -7,6 +7,7 @@ export type AuthUser = {
   email: string;
   name: string;
   role: "admin" | "hr" | "employee";
+  id?: string;
 };
 
 export async function getAuthUser(): Promise<AuthUser | null> {

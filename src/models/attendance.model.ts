@@ -35,16 +35,26 @@ export interface IAttendance extends Document {
   network?: INetwork;
   checkInIP?: string;
   checkOutIP?: string;
-  source?: "button" | "auto";
+  source?: "button" | "auto" | "manual";
   checkInLocation?: ICheckInLocation;
   checkOutLocation?: ICheckInLocation;
+
+  manualEntry?: boolean;
+  manualNote?: string;
+  createdBy?: string;
+  updatedBy?: string;
+  createdByRole?: "admin" | "hr";
+  updatedByRole?: "admin" | "hr";
 }
 
-const breakSchema = new Schema<IBreak>({
-  breakIn: { type: Date, required: true },
-  breakOut: { type: Date },
-  duration: { type: Number, default: 0 },
-});
+const breakSchema = new Schema<IBreak>(
+  {
+    breakIn: { type: Date, required: true },
+    breakOut: { type: Date },
+    duration: { type: Number, default: 0 },
+  },
+  { _id: false },
+);
 
 const checkInLocationSchema = new Schema<ICheckInLocation>(
   {
@@ -76,7 +86,10 @@ const attendanceSchema = new Schema<IAttendance>(
     checkOut: {
       type: Date,
     },
-    breaks: [breakSchema],
+    breaks: {
+      type: [breakSchema],
+      default: [],
+    },
     status: {
       type: String,
       enum: ["present", "absent", "half-day", "on-break"],
@@ -84,12 +97,15 @@ const attendanceSchema = new Schema<IAttendance>(
     },
     totalHours: {
       type: Number,
+      default: 0,
     },
     totalBreakTime: {
       type: Number,
+      default: 0,
     },
     totalWorkHours: {
       type: Number,
+      default: 0,
     },
     network: {
       ip: { type: String },
@@ -104,11 +120,35 @@ const attendanceSchema = new Schema<IAttendance>(
     },
     source: {
       type: String,
-      enum: ["button", "auto"],
+      enum: ["button", "auto", "manual"],
       default: "button",
     },
     checkInLocation: checkInLocationSchema,
     checkOutLocation: checkInLocationSchema,
+
+    manualEntry: {
+      type: Boolean,
+      default: false,
+    },
+    manualNote: {
+      type: String,
+      trim: true,
+      maxlength: 500,
+    },
+    createdBy: {
+      type: String,
+    },
+    updatedBy: {
+      type: String,
+    },
+    createdByRole: {
+      type: String,
+      enum: ["admin", "hr"],
+    },
+    updatedByRole: {
+      type: String,
+      enum: ["admin", "hr"],
+    },
   },
   {
     timestamps: true,

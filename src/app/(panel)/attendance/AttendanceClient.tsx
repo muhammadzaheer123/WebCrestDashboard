@@ -6,6 +6,7 @@ import AttendanceStatus from "./AttendanceStatus";
 import AttendanceHistory from "./AttendanceHistory";
 import AttendanceMonthly from "./AttendanceMonthly";
 import AutoCheckInCard from "./AutoCheckInCard";
+import ManualAttendanceForm from "./ManualAttendanceForm";
 
 export default function AttendanceClient() {
   const [attendance, setAttendance] = useState<any>(null);
@@ -71,17 +72,21 @@ export default function AttendanceClient() {
         </div>
 
         <div className="mb-6">
+          <ManualAttendanceForm />
+        </div>
+
+        <div className="mb-6">
           <AutoCheckInCard
             attendance={attendance}
             attendanceLoaded={attendanceLoaded}
-            onSuccess={fetchAttendance}
+            onSuccess={refreshData}
           />
         </div>
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
           <div className="space-y-5 lg:col-span-5">
             <AttendanceStatus data={attendance} />
-            <AttendanceClock refreshData={fetchAttendance} />
+            <AttendanceClock refreshData={refreshData} />
           </div>
 
           <div className="lg:col-span-7">
